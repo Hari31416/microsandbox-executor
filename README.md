@@ -240,6 +240,70 @@ Published image:
 
 - `hari31416/sandbox-data-science:py312-v1`
 
+## Integrating With Agents
+
+This service is designed to sit behind an agent that generates Python code, such as an LLM-powered data analyst.
+
+A typical integration looks like this:
+
+1. Your application stores user-provided files in S3-compatible object storage.
+2. Your agent inspects the task, chooses relevant input files, and generates Python code.
+3. Your application calls `POST /v1/execute` with:
+   - a stable `session_id`
+   - the bucket-relative `file_paths` the code should be able to read
+   - an `entrypoint` path where the generated script should live
+   - the generated Python `code`
+   - an appropriate `python_profile`, usually `data-science` for analyst workloads
+4. The sandbox service stages those files into `/workspace`, runs the code in a fresh microVM, and uploads changed output files back to object storage.
+5. Your application reads `stdout`, `stderr`, `files_uploaded`, and `exit_code` from the response, then feeds that back into the agent for the next step.
+
+For an LLM-powered data analyst, the common loop is:
+
+- upload raw inputs like CSV, Excel, or JSON files
+- ask the model to write analysis or transformation code
+- execute that code through the sandbox service
+- show stdout, charts, and generated artifacts to the user
+- let the model revise the code using the previous run result
+
+Good integration practices:
+
+- reuse the same `session_id` across related runs so the agent can build on prior outputs
+- keep `network_mode` as `none` unless the task genuinely needs external access
+- choose `data-science` when the agent needs `pandas`, `matplotlib`, `seaborn`, `plotly`, or `scikit-learn`
+- treat `stdout` and uploaded files as part of the agent's working memory
+- persist the script itself under a predictable path like `projects/<task>/scripts/main.py` so retries are reproducible
+
+Minimal Python client example:
+
+```python
+from sandbox_executor_client import SandboxExecutorClient, ExecuteRequest
+
+client = SandboxExecutorClient("http://127.0.0.1:3000")
+
+result = client.execute(
+    ExecuteRequest(
+        session_id="analysis-123",
+        file_paths=[
+            "projects/analysis-123/inputs/customers.csv",
+        ],
+        entrypoint="projects/analysis-123/scripts/main.py",
+        python_profile="data-science",
+        code="""
+import pandas as pd
+
+df = pd.read_csv("projects/analysis-123/inputs/customers.csv")
+print(df.head())
+df.describe(include="all").to_csv("projects/analysis-123/outputs/summary.csv")
+""",
+        network_mode="none",
+    )
+)
+
+print(result.exit_code)
+print(result.stdout)
+print(result.files_uploaded)
+```
+
 ## Local Development
 
 Install dependencies:
