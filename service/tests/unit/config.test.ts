@@ -17,7 +17,7 @@ test("loadConfig uses generic S3-compatible storage settings", () => {
   assert.equal(config.s3.bucket, "executor-sessions");
   assert.equal(config.s3.forcePathStyle, true);
   assert.equal(config.runtimeImages.default, "python:3.12");
-  assert.equal(config.runtimeImages["data-science"], "amancevice/pandas:latest");
+  assert.equal(config.runtimeImages["data-science"], "hari31416/sandbox-data-science:py312-v1");
   assert.equal(config.enableRestrictedExec, false);
   assert.deepEqual(config.blockedImports, ["subprocess", "socket", "multiprocessing", "resource", "pty"]);
 });

@@ -11,7 +11,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"]).default("info"),
   RUNTIME: z.enum(["microsandbox", "docker"]).default("microsandbox"),
   MICROSANDBOX_IMAGE: z.string().min(1).default("python:3.12"),
-  MICROSANDBOX_IMAGE_DATA_SCIENCE: z.string().min(1).default("amancevice/pandas:latest"),
+  MICROSANDBOX_IMAGE_DATA_SCIENCE: z.string().min(1).default("hari31416/sandbox-data-science:py312-v1"),
   SCRATCH_ROOT: z.string().min(1).default("/tmp/agent-sandbox"),
   GUEST_WORKSPACE_PATH: z.string().min(1).default("/workspace"),
   DEFAULT_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),

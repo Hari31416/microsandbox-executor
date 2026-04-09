@@ -33,3 +33,12 @@ frontend-dev:
 
 frontend-stop:
   -kill $(lsof -ti tcp:5173)
+
+build-data-science-image image="sandbox-data-science:py312-v1":
+  docker build --platform linux/arm64 -t {{image}} images/data-science-runtime
+
+test-data-science-image image="sandbox-data-science:py312-v1":
+  docker run --rm --platform linux/arm64 {{image}} python3 -c "import numpy, pandas, matplotlib, seaborn, sklearn, plotly, scipy, openpyxl; print('data-science runtime ok')"
+
+publish-data-science-image image:
+  docker buildx build --platform linux/amd64,linux/arm64 -t {{image}} --push images/data-science-runtime

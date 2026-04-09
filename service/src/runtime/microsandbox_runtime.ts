@@ -10,6 +10,7 @@ export class MicrosandboxRuntime implements SandboxRuntime {
     }
 
     console.info("[microsandbox] creating sandbox", {
+      timestamp: new Date().toISOString(),
       sandboxName: input.sandboxName,
       image: input.image,
       workspaceHostPath: input.workspaceHostPath,
@@ -36,6 +37,7 @@ export class MicrosandboxRuntime implements SandboxRuntime {
       network: buildNetworkConfig(input.networkMode, input.allowedHosts)
     });
     console.info("[microsandbox] sandbox ready", {
+      timestamp: new Date().toISOString(),
       sandboxName: input.sandboxName,
       image: input.image,
       createDurationMs: Date.now() - createStartedAt
@@ -45,6 +47,7 @@ export class MicrosandboxRuntime implements SandboxRuntime {
 
     try {
       console.info("[microsandbox] starting command", {
+        timestamp: new Date().toISOString(),
         sandboxName: input.sandboxName,
         command: input.command,
         args: input.args,
@@ -59,6 +62,7 @@ export class MicrosandboxRuntime implements SandboxRuntime {
       });
 
       console.info("[microsandbox] command finished", {
+        timestamp: new Date().toISOString(),
         sandboxName: input.sandboxName,
         exitCode: output.code,
         durationMs: Date.now() - startedAt
@@ -72,12 +76,14 @@ export class MicrosandboxRuntime implements SandboxRuntime {
       };
     } catch (error) {
       console.error("[microsandbox] command failed", {
+        timestamp: new Date().toISOString(),
         sandboxName: input.sandboxName,
         error: error instanceof Error ? error.message : "Unknown error"
       });
       throw error;
     } finally {
       console.info("[microsandbox] cleaning sandbox", {
+        timestamp: new Date().toISOString(),
         sandboxName: input.sandboxName
       });
       await this.cleanupSandbox(sandbox, input.sandboxName);
@@ -127,6 +133,7 @@ export class MicrosandboxRuntime implements SandboxRuntime {
     }
 
     console.info("[microsandbox] sandbox cleaned", {
+      timestamp: new Date().toISOString(),
       sandboxName
     });
   }

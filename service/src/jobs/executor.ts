@@ -22,6 +22,7 @@ export class JobExecutor {
     this.validateRequest(request);
 
     console.info("[executor] starting job", {
+      timestamp: new Date().toISOString(),
       jobId,
       sessionId: request.sessionId,
       pythonProfile: request.pythonProfile,
@@ -40,6 +41,7 @@ export class JobExecutor {
 
     try {
       console.info("[executor] staging workspace files", {
+        timestamp: new Date().toISOString(),
         jobId,
         workspacePath: workspace.workspacePath
       });
@@ -55,6 +57,7 @@ export class JobExecutor {
       });
 
       console.info("[executor] launching runtime", {
+        timestamp: new Date().toISOString(),
         jobId,
         sandboxName: createSandboxName(jobId),
         image: runtimeImage,
@@ -82,6 +85,7 @@ export class JobExecutor {
       const uploadedFiles = await this.sync.persistFiles(workspace.workspacePath, diff.changedFiles);
 
       console.info("[executor] completed job", {
+        timestamp: new Date().toISOString(),
         jobId,
         exitCode: runtimeResult.exitCode,
         durationMs: runtimeResult.durationMs,
@@ -97,12 +101,14 @@ export class JobExecutor {
       });
     } catch (error) {
       console.error("[executor] job failed", {
+        timestamp: new Date().toISOString(),
         jobId,
         error: error instanceof Error ? error.message : "Unknown error"
       });
       return this.jobStore.fail(jobId, error);
     } finally {
       console.info("[executor] cleaning workspace", {
+        timestamp: new Date().toISOString(),
         jobId,
         jobRoot: workspace.jobRoot
       });
