@@ -38,6 +38,7 @@ export class ExecutorClient {
     session_id: string;
     file_paths: string[];
     code: string;
+    entrypoint?: string;
     network_mode?: "none" | "allowlist" | "public";
     allowed_hosts?: string[];
   }) {

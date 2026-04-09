@@ -12,6 +12,7 @@ import { DemoStorage } from "./storage.js";
 const executeRequestSchema = z.object({
   sessionId: z.string().min(1),
   filePaths: z.array(z.string().min(1)).min(1),
+  entrypoint: z.string().min(1),
   code: z.string().min(1)
 });
 
@@ -82,11 +83,16 @@ async function main() {
     }
 
     const sessionRoot = `${config.demoPrefix}/${sessionId}`;
-    const suggestedOutputPath = `${sessionRoot}/outputs/result${pickDefaultExtension(uploads[0]?.name ?? "")}`;
+    const suggestedEntrypoint = `${sessionRoot}/scripts/main.py`;
+    const csvFile = uploads.find((file) => file.name.toLowerCase().endsWith(".csv"));
+    const suggestedOutputPath = csvFile
+      ? `${sessionRoot}/outputs/${csvFile.name.split(".")[0]}-metadata.txt`
+      : `${sessionRoot}/outputs/result${pickDefaultExtension(uploads[0]?.name ?? "")}`;
 
     return {
       sessionId,
       sessionRoot,
+      suggestedEntrypoint,
       filePaths: uploads.map((file) => file.key),
       files: uploads,
       suggestedOutputPath,
@@ -99,6 +105,7 @@ async function main() {
     const result = await executor.execute({
       session_id: payload.sessionId,
       file_paths: payload.filePaths,
+      entrypoint: payload.entrypoint,
       code: payload.code
     });
 
@@ -132,22 +139,55 @@ async function main() {
 }
 
 function buildSuggestedCode(filePaths: string[], outputPath: string) {
-  const inputPath = JSON.stringify(filePaths[0] ?? "");
+  const csvPath = filePaths.find((p) => p.toLowerCase().endsWith(".csv"));
+  const inputPath = JSON.stringify(csvPath || filePaths[0] || "");
   const outputLiteral = JSON.stringify(outputPath);
+
+  if (csvPath) {
+    return `import pandas as pd
+from pathlib import Path
+
+input_path = Path(${inputPath})
+output_path = Path(${outputLiteral})
+
+# Load the CSV data using pandas
+print(f"Reading dataset: {input_path.name}")
+df = pd.read_csv(input_path)
+
+# Print dataset information to the console
+print("\\n--- DataFrame Info ---")
+print(df.info())
+
+print("\\n--- Column Names ---")
+print(df.columns.tolist())
+
+# Save column metadata to the output file
+output_path.parent.mkdir(parents=True, exist_ok=True)
+with open(output_path, "w", encoding="utf-8") as f:
+    f.write(f"Schema for {input_path.name}\\n")
+    f.write("=" * 40 + "\\n")
+    for col in df.columns:
+        f.write(f"Column: {col:20} Type: {str(df[col].dtype)}\\n")
+
+print(f"\\nColumn metadata successfully saved to {output_path}")
+`;
+  }
 
   return `from pathlib import Path
 
 input_path = Path(${inputPath})
 output_path = Path(${outputLiteral})
 
+print(f"Processing {input_path}...")
 text = input_path.read_text(encoding="utf-8")
+
+# Default transformation: convert to uppercase
 transformed = text.upper()
 
 output_path.parent.mkdir(parents=True, exist_ok=True)
 output_path.write_text(transformed, encoding="utf-8")
 
-print(f"Read {input_path}")
-print(f"Wrote {output_path}")
+print(f"Successfully wrote transformed output to {output_path}")
 `;
 }
 
