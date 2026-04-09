@@ -382,3 +382,7 @@ curl -sS http://localhost:3000/v1/execute \
 
 - job metadata is currently stored in memory, so restart clears historical job records
 - deletion propagation from workspace back to object storage is intentionally not implemented in v1
+
+## Acknowledgements
+
+Special thanks to [superradcompany/microsandbox](https://github.com/superradcompany/microsandbox) for the microVM sandbox runtime that powers execution in this project.
