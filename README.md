@@ -7,7 +7,8 @@ This repository contains:
 - the executor service in `service/`
 - a thin Python client in `python-client/`
 - a demo app in `demo/`
-- local container helpers in `service/docker-compose.yml`, `demo/docker-compose.yml`, and `justfile`
+- local run helpers in `justfile`
+- demo container helpers in `demo/docker-compose.yml`
 - a local checkout of `microsandbox/`, which is the default sandbox runtime
 
 ## What This Builds
@@ -65,6 +66,12 @@ So the split is:
 - Microsandbox execution: no Docker required
 - local image build/push and demo infra: Docker required in this repo
 
+Important platform note:
+
+- the sandbox service itself should run on the host
+- Microsandbox needs host-level virtualization, and running it inside Docker is not the default supported local path here
+- the included Docker setup is for the demo stack only
+
 ## Runtime Requirements
 
 To run the executor service, you need:
@@ -85,6 +92,28 @@ If you want to run the included demo app, you additionally need:
 - the demo server/frontend dependencies
 - local object storage such as MinIO
 - Docker, because the provided demo infra uses `docker compose`
+
+## Running Locally
+
+Recommended local flow on macOS:
+
+1. Start the sandbox service on the host:
+   - `just sandbox-up`
+2. Start the demo stack in Docker:
+   - `just demo-up`
+3. Open the demo:
+   - `http://127.0.0.1:5173`
+
+Useful commands:
+
+- `just sandbox-build` builds the service TypeScript output
+- `just sandbox-up` starts the executor on the host and writes logs to `.run/sandbox.log`
+- `just sandbox-logs` tails `.run/sandbox.log`
+- `just sandbox-down` stops the host-run executor
+- `just demo-build` builds the demo containers
+- `just demo-up` starts MinIO, demo API, and demo web
+- `just demo-down` stops the demo containers
+- `just demo-logs` tails demo API and frontend logs
 
 ## Repository Layout
 
@@ -305,33 +334,19 @@ print(result.files_uploaded)
 
 ## Local Development
 
-Install dependencies:
+Run the executor service on the host:
 
 ```bash
-just install-service
-just install-demo
-```
-
-Run the executor service:
-
-```bash
-just sandbox-dev
-```
-
-Run the containerized sandbox service:
-
-```bash
-just sandbox-build
 just sandbox-up
 just sandbox-logs
 ```
 
-Run demo infrastructure:
+Run the demo stack:
 
 ```bash
-just infra-up
-just demo-api-dev
-just frontend-dev
+just demo-build
+just demo-up
+just demo-logs
 ```
 
 Useful service commands:

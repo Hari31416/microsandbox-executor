@@ -17,20 +17,19 @@ This demo shows the full flow:
 
 ## Quick start
 
-1. Review the shared root [.env.example](../.env.example) and copy it to `.env` with any necessary adjustments (e.g. MinIO credentials).
-2. `just infra-up`
-3. `just install-service`
-4. `just install-demo`
-5. In separate terminals run:
-   - `just sandbox-dev`
-   - `just demo-api-dev`
-   - `just frontend-dev`
+1. Review the shared root [.env.example](../.env.example) and copy it to `.env` with any necessary adjustments for the host-run sandbox service.
+2. Optionally copy [`.env.docker.example`](./.env.docker.example) to `.env.docker` if you want custom demo container settings.
+3. Start the sandbox service on the host:
+   - `just sandbox-up`
+4. Start the demo stack:
+   - `just demo-up`
+5. Open `http://127.0.0.1:5173`
 
 ## Notes
 
-- Both the sandbox service and the demo API load the shared repo-root `.env` by default.
-- `just infra-up` uses `demo/docker-compose.yml`, while the containerized sandbox service uses `service/docker-compose.yml`.
-- You can still point either process at a different file with `ENV_FILE=/path/to/file just sandbox-dev` or `ENV_FILE=/path/to/file just demo-api-dev`.
+- The sandbox service runs on the host and loads the shared repo-root `.env`.
+- The demo containers use `demo/.env.docker` when present, otherwise `demo/.env.docker.example`.
+- The demo API reaches the host-run sandbox service at `http://host.docker.internal:3000`.
 - Default ports are still code-driven:
   - sandbox service: `3000`
   - demo API: `8787`

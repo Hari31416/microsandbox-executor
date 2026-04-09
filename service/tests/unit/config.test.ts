@@ -21,3 +21,17 @@ test("loadConfig uses generic S3-compatible storage settings", () => {
   assert.equal(config.enableRestrictedExec, false);
   assert.deepEqual(config.blockedImports, ["subprocess", "socket", "multiprocessing", "resource", "pty"]);
 });
+
+test("loadConfig parses boolean env strings explicitly", () => {
+  const config = loadConfig({
+    ENABLE_RESTRICTED_EXEC: "false",
+    S3_ENDPOINT: "http://localhost:9000",
+    S3_BUCKET: "executor-sessions",
+    S3_ACCESS_KEY_ID: "minioadmin",
+    S3_SECRET_ACCESS_KEY: "minioadmin",
+    S3_FORCE_PATH_STYLE: "false"
+  });
+
+  assert.equal(config.enableRestrictedExec, false);
+  assert.equal(config.s3.forcePathStyle, false);
+});

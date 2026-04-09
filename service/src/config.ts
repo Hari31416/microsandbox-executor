@@ -5,6 +5,23 @@ import { fileURLToPath } from "node:url";
 import { parse as parseDotenv } from "dotenv";
 import { z } from "zod";
 
+const booleanEnv = (defaultValue?: boolean) =>
+  z.preprocess((value) => {
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+
+      if (["true", "1", "yes", "on"].includes(normalized)) {
+        return true;
+      }
+
+      if (["false", "0", "no", "off"].includes(normalized)) {
+        return false;
+      }
+    }
+
+    return value;
+  }, z.boolean());
+
 const envSchema = z.object({
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
@@ -19,7 +36,7 @@ const envSchema = z.object({
   MAX_CPU_LIMIT: z.coerce.number().int().positive().default(4),
   DEFAULT_MEMORY_MB: z.coerce.number().int().positive().default(2048),
   MAX_MEMORY_MB: z.coerce.number().int().positive().default(4096),
-  ENABLE_RESTRICTED_EXEC: z.coerce.boolean().default(false),
+  ENABLE_RESTRICTED_EXEC: booleanEnv().default(false),
   RESTRICTED_EXEC_BLOCKED_IMPORTS: z.string().default("subprocess,socket,multiprocessing,resource,pty"),
   HEALTHCHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   S3_ENDPOINT: z.string().url().optional(),
@@ -27,7 +44,7 @@ const envSchema = z.object({
   S3_BUCKET: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
-  S3_FORCE_PATH_STYLE: z.coerce.boolean().optional()
+  S3_FORCE_PATH_STYLE: booleanEnv().optional()
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;

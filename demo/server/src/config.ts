@@ -5,6 +5,23 @@ import { fileURLToPath } from "node:url";
 import { parse as parseDotenv } from "dotenv";
 import { z } from "zod";
 
+const booleanEnv = () =>
+  z.preprocess((value) => {
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+
+      if (["true", "1", "yes", "on"].includes(normalized)) {
+        return true;
+      }
+
+      if (["false", "0", "no", "off"].includes(normalized)) {
+        return false;
+      }
+    }
+
+    return value;
+  }, z.boolean());
+
 const envSchema = z.object({
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(8787),
@@ -14,7 +31,7 @@ const envSchema = z.object({
   S3_BUCKET: z.string().min(1),
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
-  S3_FORCE_PATH_STYLE: z.coerce.boolean().default(true),
+  S3_FORCE_PATH_STYLE: booleanEnv().default(true),
   DEMO_PREFIX: z.string().min(1).default("demo")
 });
 

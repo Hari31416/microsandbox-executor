@@ -44,7 +44,19 @@ interface ExecutionResult {
 const starterCode = `# Upload one or more files first.
 # The demo will suggest concrete input/output paths here.`;
 const apiBaseUrl = (import.meta.env.VITE_DEMO_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
-const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
+const apiUrl = (path: string) => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (!apiBaseUrl) {
+    return normalizedPath;
+  }
+
+  if (apiBaseUrl.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return `${apiBaseUrl}${normalizedPath.slice(4)}`;
+  }
+
+  return `${apiBaseUrl}${normalizedPath}`;
+};
 
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])

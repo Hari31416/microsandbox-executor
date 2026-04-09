@@ -22,5 +22,39 @@ services:
       /usr/bin/mc anonymous set private local/sandbox-demo
       "
 
+  demo-api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    depends_on:
+      - minio
+      - minio-setup
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${DEMO_API_PORT:-8787}
+      EXECUTOR_BASE_URL: ${EXECUTOR_BASE_URL:-http://host.docker.internal:3000}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-sandbox-demo}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-minioadmin}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      DEMO_PREFIX: ${DEMO_PREFIX:-demo}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${DEMO_API_PORT:-8787}:8787"
+
+  demo-web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_DEMO_API_BASE_URL: /api
+    depends_on:
+      - demo-api
+    ports:
+      - "${DEMO_WEB_PORT:-5173}:80"
+
 volumes:
   minio-data:
