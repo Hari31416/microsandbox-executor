@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sandbox-executor-client"
+version = "0.1.0"
+description = "Thin Python client for the sandbox executor service"
+requires-python = ">=3.10"
+authors = [
+  { name = "OpenAI Codex" }
+]
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["."]

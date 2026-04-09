@@ -1,3 +1,8 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { config as loadDotenv } from "dotenv";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -27,6 +32,24 @@ const envSchema = z.object({
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;
+
+const SERVICE_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const DEFAULT_ENV_FILE = resolve(SERVICE_ROOT, ".env");
+
+export function loadEnvFile(explicitPath = process.env.ENV_FILE) {
+  const envFilePath = explicitPath ? resolve(explicitPath) : DEFAULT_ENV_FILE;
+
+  if (!existsSync(envFilePath)) {
+    return null;
+  }
+
+  loadDotenv({
+    path: envFilePath,
+    override: false
+  });
+
+  return envFilePath;
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const parsed = envSchema.parse(env);
