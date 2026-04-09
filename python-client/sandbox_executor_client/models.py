@@ -11,6 +11,7 @@ NetworkMode = Literal["none", "allowlist", "public"]
 @dataclass(slots=True)
 class ExecuteRequest:
     session_id: str
+    file_paths: list[str]
     code: str
     job_id: str | None = None
     entrypoint: str = "main.py"
@@ -25,6 +26,7 @@ class ExecuteRequest:
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "session_id": self.session_id,
+            "file_paths": self.file_paths,
             "code": self.code,
             "entrypoint": self.entrypoint,
             "network_mode": self.network_mode,

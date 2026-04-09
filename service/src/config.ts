@@ -27,7 +27,6 @@ const envSchema = z.object({
   S3_BUCKET: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
-  S3_SESSION_PREFIX: z.string().min(1).default("sessions"),
   S3_FORCE_PATH_STYLE: z.coerce.boolean().optional()
 });
 
@@ -84,7 +83,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       bucket: parsed.S3_BUCKET,
       accessKeyId: parsed.S3_ACCESS_KEY_ID,
       secretAccessKey: parsed.S3_SECRET_ACCESS_KEY,
-      sessionPrefix: parsed.S3_SESSION_PREFIX,
       forcePathStyle: parsed.S3_FORCE_PATH_STYLE ?? Boolean(parsed.S3_ENDPOINT)
     }
   };

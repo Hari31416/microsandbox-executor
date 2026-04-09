@@ -1,8 +1,11 @@
 import { z } from "zod";
 
+import { normalizeRelativePath } from "../util/fs.js";
+
 export const executeRequestSchema = z
   .object({
     session_id: z.string().min(1),
+    file_paths: z.array(z.string().min(1)).min(1),
     job_id: z.string().min(1).optional(),
     code: z.string(),
     entrypoint: z.string().min(1).default("main.py"),
@@ -22,9 +25,22 @@ export const executeRequestSchema = z
         path: ["allowed_hosts"]
       });
     }
+
+    value.file_paths.forEach((filePath, index) => {
+      try {
+        normalizeRelativePath(filePath);
+      } catch (error) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: error instanceof Error ? error.message : "Invalid file path",
+          path: ["file_paths", index]
+        });
+      }
+    });
   })
   .transform((value) => ({
     sessionId: value.session_id,
+    filePaths: value.file_paths,
     jobId: value.job_id,
     code: value.code,
     entrypoint: value.entrypoint,

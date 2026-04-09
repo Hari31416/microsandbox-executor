@@ -29,7 +29,7 @@ export class JobExecutor {
     const workspace = await createJobWorkspace(this.config.scratchRoot, request.sessionId, jobId);
 
     try {
-      await this.sync.hydrateSession(request.sessionId, workspace.workspacePath);
+      await this.sync.stageFiles(request.filePaths, workspace.workspacePath);
       const beforeManifest = await captureManifest(workspace.workspacePath);
 
       const preparedExecution = await preparePythonExecution({
@@ -57,7 +57,7 @@ export class JobExecutor {
 
       const afterManifest = await captureManifest(workspace.workspacePath, preparedExecution.ignoredRelativePrefixes);
       const diff = diffManifests(beforeManifest, afterManifest);
-      const uploadedFiles = await this.sync.persistFiles(request.sessionId, workspace.workspacePath, diff.changedFiles);
+      const uploadedFiles = await this.sync.persistFiles(workspace.workspacePath, diff.changedFiles);
 
       return this.jobStore.complete(jobId, {
         exitCode: runtimeResult.exitCode,

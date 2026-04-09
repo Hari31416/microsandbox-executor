@@ -1,7 +1,6 @@
 import {
   GetObjectCommand,
   HeadBucketCommand,
-  ListObjectsV2Command,
   PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
@@ -10,7 +9,7 @@ import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 
 import type { AppConfig } from "../config.js";
-import { resolveWithin, writeStreamToFile } from "../util/fs.js";
+import { normalizeRelativePath, resolveWithin, writeStreamToFile } from "../util/fs.js";
 import type { SessionStorage, StorageHealth } from "./types.js";
 
 type S3CompatibleClient = S3Client | null;
@@ -62,22 +61,15 @@ export class S3SessionStorage implements SessionStorage {
     }
   }
 
-  async downloadSession(sessionId: string, workspacePath: string) {
-    if (!this.client) {
+  async downloadFiles(filePaths: string[], workspacePath: string) {
+    if (!this.client || filePaths.length === 0) {
       return [];
     }
 
-    const prefix = this.objectPrefix(sessionId);
-    const objectNames = await this.listObjectNames(prefix);
     const downloadedFiles: string[] = [];
+    const normalizedPaths = [...new Set(filePaths.map((filePath) => normalizeRelativePath(filePath)))].sort();
 
-    for (const objectName of objectNames) {
-      const relativePath = objectName.slice(prefix.length);
-
-      if (!relativePath) {
-        continue;
-      }
-
+    for (const objectName of normalizedPaths) {
       const response = await this.client.send(
         new GetObjectCommand({
           Bucket: this.config.bucket!,
@@ -85,15 +77,15 @@ export class S3SessionStorage implements SessionStorage {
         })
       );
 
-      await writeStreamToFile(asNodeReadable(response.Body), resolveWithin(workspacePath, relativePath));
-      downloadedFiles.push(relativePath);
+      await writeStreamToFile(asNodeReadable(response.Body), resolveWithin(workspacePath, objectName));
+      downloadedFiles.push(objectName);
     }
 
     downloadedFiles.sort();
     return downloadedFiles;
   }
 
-  async uploadFiles(sessionId: string, workspacePath: string, relativePaths: string[]) {
+  async uploadFiles(workspacePath: string, relativePaths: string[]) {
     if (!this.client || relativePaths.length === 0) {
       return [];
     }
@@ -101,49 +93,21 @@ export class S3SessionStorage implements SessionStorage {
     const uploaded: string[] = [];
 
     for (const relativePath of relativePaths) {
+      const objectKey = normalizeRelativePath(relativePath);
+
       await this.client.send(
         new PutObjectCommand({
           Bucket: this.config.bucket!,
-          Key: `${this.objectPrefix(sessionId)}${relativePath}`,
-          Body: createReadStream(resolveWithin(workspacePath, relativePath))
+          Key: objectKey,
+          Body: createReadStream(resolveWithin(workspacePath, objectKey))
         })
       );
 
-      uploaded.push(relativePath);
+      uploaded.push(objectKey);
     }
 
     uploaded.sort();
     return uploaded;
-  }
-
-  private async listObjectNames(prefix: string) {
-    const names: string[] = [];
-    let continuationToken: string | undefined;
-
-    do {
-      const response = await this.client!.send(
-        new ListObjectsV2Command({
-          Bucket: this.config.bucket!,
-          Prefix: prefix,
-          ContinuationToken: continuationToken
-        })
-      );
-
-      for (const entry of response.Contents ?? []) {
-        if (entry.Key && !entry.Key.endsWith("/")) {
-          names.push(entry.Key);
-        }
-      }
-
-      continuationToken = response.NextContinuationToken;
-    } while (continuationToken);
-
-    names.sort();
-    return names;
-  }
-
-  private objectPrefix(sessionId: string) {
-    return `${trimSlashes(this.config.sessionPrefix)}/${sessionId}/`;
   }
 }
 
@@ -170,8 +134,4 @@ function asNodeReadable(body: unknown) {
   }
 
   throw new Error("Unsupported S3 object body type");
-}
-
-function trimSlashes(value: string) {
-  return value.replace(/^\/+/, "").replace(/\/+$/, "");
 }

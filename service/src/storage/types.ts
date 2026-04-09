@@ -6,6 +6,6 @@ export interface StorageHealth {
 
 export interface SessionStorage {
   healthCheck(): Promise<StorageHealth>;
-  downloadSession(sessionId: string, workspacePath: string): Promise<string[]>;
-  uploadFiles(sessionId: string, workspacePath: string, relativePaths: string[]): Promise<string[]>;
+  downloadFiles(filePaths: string[], workspacePath: string): Promise<string[]>;
+  uploadFiles(workspacePath: string, relativePaths: string[]): Promise<string[]>;
 }
