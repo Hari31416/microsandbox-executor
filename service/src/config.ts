@@ -17,25 +17,23 @@ const envSchema = z.object({
   ENABLE_RESTRICTED_EXEC: z.coerce.boolean().default(true),
   RESTRICTED_EXEC_BLOCKED_IMPORTS: z.string().default("subprocess,socket,ctypes,multiprocessing,resource,pty"),
   HEALTHCHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  MINIO_ENDPOINT: z.string().optional(),
-  MINIO_PORT: z.coerce.number().int().positive().default(9000),
-  MINIO_USE_SSL: z.coerce.boolean().default(false),
-  MINIO_ACCESS_KEY: z.string().optional(),
-  MINIO_SECRET_KEY: z.string().optional(),
-  MINIO_BUCKET: z.string().optional(),
-  MINIO_REGION: z.string().optional(),
-  MINIO_SESSION_PREFIX: z.string().min(1).default("sessions")
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_REGION: z.string().min(1).default("us-east-1"),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_SESSION_PREFIX: z.string().min(1).default("sessions"),
+  S3_FORCE_PATH_STYLE: z.coerce.boolean().optional()
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const parsed = envSchema.parse(env);
-  const minioConfigured =
-    Boolean(parsed.MINIO_ENDPOINT) &&
-    Boolean(parsed.MINIO_ACCESS_KEY) &&
-    Boolean(parsed.MINIO_SECRET_KEY) &&
-    Boolean(parsed.MINIO_BUCKET);
+  const s3Configured =
+    Boolean(parsed.S3_BUCKET) &&
+    Boolean(parsed.S3_ACCESS_KEY_ID) &&
+    Boolean(parsed.S3_SECRET_ACCESS_KEY);
 
   return {
     host: parsed.HOST,
@@ -56,16 +54,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       .map((value) => value.trim())
       .filter(Boolean),
     healthcheckTimeoutMs: parsed.HEALTHCHECK_TIMEOUT_MS,
-    minio: {
-      configured: minioConfigured,
-      endpoint: parsed.MINIO_ENDPOINT,
-      port: parsed.MINIO_PORT,
-      useSSL: parsed.MINIO_USE_SSL,
-      accessKey: parsed.MINIO_ACCESS_KEY,
-      secretKey: parsed.MINIO_SECRET_KEY,
-      bucket: parsed.MINIO_BUCKET,
-      region: parsed.MINIO_REGION,
-      sessionPrefix: parsed.MINIO_SESSION_PREFIX
+    s3: {
+      configured: s3Configured,
+      endpoint: parsed.S3_ENDPOINT,
+      region: parsed.S3_REGION,
+      bucket: parsed.S3_BUCKET,
+      accessKeyId: parsed.S3_ACCESS_KEY_ID,
+      secretAccessKey: parsed.S3_SECRET_ACCESS_KEY,
+      sessionPrefix: parsed.S3_SESSION_PREFIX,
+      forcePathStyle: parsed.S3_FORCE_PATH_STYLE ?? Boolean(parsed.S3_ENDPOINT)
     }
   };
 }

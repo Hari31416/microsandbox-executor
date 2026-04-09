@@ -4,8 +4,8 @@ import type { AppConfig } from "./config.js";
 import { JobExecutor } from "./jobs/executor.js";
 import { InMemoryJobStore } from "./jobs/queue.js";
 import type { SandboxRuntime } from "./runtime/types.js";
-import { MinioSessionStorage } from "./storage/minio.js";
 import { WorkspaceSync } from "./storage/sync.js";
+import type { SessionStorage } from "./storage/types.js";
 import { registerExecuteRoutes } from "./routes/execute.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerJobRoutes } from "./routes/jobs.js";
@@ -14,7 +14,7 @@ import { createLoggerOptions } from "./util/logging.js";
 export interface AppServices {
   config: AppConfig;
   runtime: SandboxRuntime;
-  storage: MinioSessionStorage;
+  storage: SessionStorage;
   sync: WorkspaceSync;
   jobStore: InMemoryJobStore;
   executor: JobExecutor;

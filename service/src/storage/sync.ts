@@ -1,7 +1,7 @@
-import { MinioSessionStorage } from "./minio.js";
+import type { SessionStorage } from "./types.js";
 
 export class WorkspaceSync {
-  constructor(private readonly storage: MinioSessionStorage) {}
+  constructor(private readonly storage: SessionStorage) {}
 
   async hydrateSession(sessionId: string, workspacePath: string) {
     return this.storage.downloadSession(sessionId, workspacePath);
