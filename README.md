@@ -4,59 +4,101 @@ Self-hosted execution service for moderately risky, agent-generated Python code.
 
 This repository contains:
 
-- a production-oriented implementation plan in `implementation_plan.md`
-- a TypeScript HTTP executor service in `service/`
-- a local checkout of `microsandbox/` used as the sandbox runtime substrate
+- the executor service in `service/`
+- a thin Python client in `python-client/`
+- a demo app in `demo/`
+- local infra helpers in `docker-compose.yml` and `justfile`
+- a local checkout of `microsandbox/`, which is the default sandbox runtime
 
 ## What This Builds
 
-The system executes Python jobs in an isolated sandbox with:
+The system executes Python jobs in a fresh sandbox with:
 
-- per-session workspaces
-- MinIO-backed file persistence
-- one fresh sandbox per job
+- per-job temporary workspaces
+- S3-compatible file staging and persistence
 - network disabled by default
 - optional allowlisted outbound networking
-- runtime abstraction so sandbox backend can be swapped later
+- runtime profiles, including a custom data-science image
+- one fresh microVM per job
 
 Primary architecture:
 
 - Control plane: TypeScript HTTP service
-- Runtime: `microsandbox` (default), Docker adapter placeholder for fallback
-- Session state: MinIO object storage
+- Runtime: `microsandbox` by default
+- Storage: S3-compatible object storage
 
-## Status
+## How Microsandbox Fits In
 
-The `service/` project already includes:
+`microsandbox` is the isolation layer that actually runs user code.
 
-- Fastify server and route wiring
-- `POST /v1/execute`, `GET /v1/jobs/:jobId`, and `GET /v1/health`
-- runtime adapter interface and `MicrosandboxRuntime` implementation
-- MinIO session download/upload support
-- workspace manifest diffing for changed/new files
-- restricted Python wrapper (defense-in-depth)
+Execution flow:
+
+1. The service accepts `POST /v1/execute`.
+2. It creates a host workspace under `/tmp/agent-sandbox/<session>/<job>/workspace`.
+3. It downloads the requested `file_paths` from S3-compatible storage into that workspace.
+4. It writes the submitted Python code into the workspace entrypoint.
+5. It starts a fresh Microsandbox microVM from the selected OCI image.
+6. It bind-mounts the host workspace into the guest at `/workspace`.
+7. It runs `python3 <entrypoint>` inside the guest.
+8. It diffs the workspace afterward and uploads changed files back to object storage.
+9. It stops the microVM and deletes the temporary host workspace.
+
+Important distinction:
+
+- Microsandbox uses OCI images like `python:3.12` or `hari31416/sandbox-data-science:py312-v1`
+- it does **not** use the Docker daemon to execute jobs when `RUNTIME=microsandbox`
+- it runs code in a short-lived microVM, not a normal Docker container
+
+## Does It Require Docker?
+
+For sandbox execution: no.
+
+If Microsandbox is installed and working on the host, the service can run jobs without Docker Desktop or the Docker daemon.
+
+Docker is still used in this repository for:
+
+- building and pushing custom OCI images
+- running local demo infrastructure like MinIO
+
+So the split is:
+
+- Microsandbox execution: no Docker required
+- local image build/push and demo infra: Docker required in this repo
+
+## Runtime Requirements
+
+To run the executor service with `RUNTIME=microsandbox`, you need:
+
+- Node.js
+- service dependencies installed in `service/`
+- the Microsandbox runtime installed and usable on the host
+- a supported host platform for Microsandbox
+- access to the OCI image you want to run, unless it is already cached
+
+If you want file staging and persistence, you also need:
+
+- an S3-compatible object store
+- valid S3 credentials and bucket configuration
+
+If you want to run the included demo app, you additionally need:
+
+- the demo server/frontend dependencies
+- local object storage such as MinIO
+- Docker, because the provided demo infra uses `docker compose`
 
 ## Repository Layout
 
 ```text
 .
+├── demo/
+├── docker-compose.yml
+├── images/
+│   └── data-science-runtime/
 ├── implementation_plan.md
-├── OPEN_SOURCE_SANDBOX_EVALUATION.md
 ├── microsandbox/
-└── service/
-    ├── package.json
-    ├── tsconfig.json
-    ├── src/
-    │   ├── server.ts
-    │   ├── app.ts
-    │   ├── config.ts
-    │   ├── routes/
-    │   ├── runtime/
-    │   ├── jobs/
-    │   ├── storage/
-    │   ├── policy/
-    │   └── util/
-    └── tests/
+├── python-client/
+├── service/
+└── justfile
 ```
 
 ## API Overview
@@ -70,9 +112,11 @@ Request body example:
 ```json
 {
   "session_id": "sess_123",
+  "file_paths": ["demo/sess_123/inputs/data.csv"],
   "job_id": "job_456",
   "code": "print('hello')",
-  "entrypoint": "main.py",
+  "entrypoint": "demo/sess_123/scripts/main.py",
+  "python_profile": "data-science",
   "timeout_seconds": 60,
   "cpu_limit": 1,
   "memory_mb": 2048,
@@ -81,7 +125,7 @@ Request body example:
   "environment": {
     "PYTHONUNBUFFERED": "1"
   },
-  "restricted_exec": true
+  "restricted_exec": false
 }
 ```
 
@@ -96,7 +140,7 @@ Response example:
   "stdout": "hello\n",
   "stderr": "",
   "duration_ms": 420,
-  "files_uploaded": ["analysis/output.txt"],
+  "files_uploaded": ["demo/sess_123/outputs/result.txt"],
   "created_at": "2026-04-09T10:00:00.000Z",
   "started_at": "2026-04-09T10:00:00.050Z",
   "completed_at": "2026-04-09T10:00:00.470Z"
@@ -113,33 +157,39 @@ Returns runtime and storage health:
 
 - overall status (`ok` or `degraded`)
 - runtime probe details
-- MinIO probe details
+- storage probe details
 
 ## Execution Flow
 
 For each execution request:
 
-1. Validate input and create/find job ID.
-2. Create local workspace at `/tmp/agent-sandbox/<session>/<job>/workspace`.
-3. Download existing session files from MinIO.
-4. Capture pre-run workspace manifest.
-5. Write user code (and optional restricted runner).
-6. Start a fresh sandbox with workspace bind mount.
-7. Execute Python with timeout/resource/network controls.
-8. Capture post-run manifest and diff changed/new files.
-9. Upload changed/new files to MinIO.
-10. Tear down sandbox and clean local scratch data.
+1. Validate input and create a job ID.
+2. Create a local workspace at `/tmp/agent-sandbox/<session>/<job>/workspace`.
+3. Download requested `file_paths` from object storage.
+4. Capture a pre-run workspace manifest.
+5. Write user code and optional restricted runner.
+6. Start a fresh sandbox with the workspace bind-mounted at `/workspace`.
+7. Execute Python with timeout, CPU, memory, and network controls.
+8. Capture a post-run manifest and diff changed/new files.
+9. Upload changed/new files back to object storage.
+10. Tear down the sandbox and clean the local scratch workspace.
 
 ## Security Model
 
-- Isolation boundary: microVM sandbox runtime.
-- Defense-in-depth: optional restricted Python import blocking layer.
-- Network default: deny all (`network_mode: none`).
-- Allowlist mode: explicit outbound host rules plus DNS, private-range, and metadata protections.
+- Primary isolation boundary: Microsandbox microVM
+- Defense-in-depth: optional restricted Python import shim
+- Network default: deny all (`network_mode: none`)
+- Resource controls: timeout, CPU, and memory limits
+
+Current recommendation:
+
+- rely on the microVM as the main safety boundary
+- keep restricted execution disabled by default for compatibility with real Python libraries like `pandas`
+- enable `restricted_exec` only for specific workloads if you need the extra policy layer
 
 ## Configuration
 
-The service is configured through environment variables.
+The service loads config from the repo root `.env` by default, with `ENV_FILE=/path/to/file` as an override.
 
 Core settings:
 
@@ -148,6 +198,7 @@ Core settings:
 - `LOG_LEVEL` (default `info`)
 - `RUNTIME` (`microsandbox` or `docker`, default `microsandbox`)
 - `MICROSANDBOX_IMAGE` (default `python:3.12`)
+- `MICROSANDBOX_IMAGE_DATA_SCIENCE` (default `hari31416/sandbox-data-science:py312-v1`)
 - `SCRATCH_ROOT` (default `/tmp/agent-sandbox`)
 - `GUEST_WORKSPACE_PATH` (default `/workspace`)
 
@@ -159,43 +210,87 @@ Execution limits:
 
 Restricted execution:
 
-- `ENABLE_RESTRICTED_EXEC` (default `true`)
+- `ENABLE_RESTRICTED_EXEC` (default `false`)
 - `RESTRICTED_EXEC_BLOCKED_IMPORTS`
 
-MinIO (optional, but required for persistent sessions):
+S3-compatible storage:
 
-- `MINIO_ENDPOINT`
-- `MINIO_PORT` (default `9000`)
-- `MINIO_USE_SSL` (default `false`)
-- `MINIO_ACCESS_KEY`
-- `MINIO_SECRET_KEY`
-- `MINIO_BUCKET`
-- `MINIO_REGION`
-- `MINIO_SESSION_PREFIX` (default `sessions`)
+- `S3_ENDPOINT`
+- `S3_REGION`
+- `S3_BUCKET`
+- `S3_ACCESS_KEY_ID`
+- `S3_SECRET_ACCESS_KEY`
+- `S3_FORCE_PATH_STYLE`
 
-When MinIO is not configured, the service still executes jobs, but session persistence is disabled.
+When S3 is not configured, the service still executes jobs, but file staging/persistence is disabled.
+
+## Python Profiles
+
+The executor currently supports:
+
+- `default`: base Python image
+- `data-science`: custom image with:
+  `numpy`, `pandas`, `matplotlib`, `seaborn`, `scikit-learn`, `plotly`, `scipy`, and `openpyxl`
+
+The custom image definition lives in:
+
+- `images/data-science-runtime/Dockerfile`
+- `images/data-science-runtime/requirements.txt`
+
+Published image:
+
+- `hari31416/sandbox-data-science:py312-v1`
 
 ## Local Development
 
-Prerequisites:
-
-- Node.js LTS
-- `microsandbox` installed and working on host
-- MinIO instance (optional for early local testing)
-
-From the `service/` directory:
+Install dependencies:
 
 ```bash
-npm install
-npm run dev
+just install-service
+just install-demo
 ```
 
-Other useful commands:
+Run the executor service:
 
 ```bash
-npm run check
-npm run build
-npm run test
+just sandbox-dev
+```
+
+Run demo infrastructure:
+
+```bash
+just infra-up
+just demo-api-dev
+just frontend-dev
+```
+
+Useful service commands:
+
+```bash
+cd service
+bun run check
+bun run build
+bun run test
+```
+
+## Custom Image Commands
+
+Build the local data-science image:
+
+```bash
+just build-data-science-image
+```
+
+Smoke-test the image:
+
+```bash
+just test-data-science-image
+```
+
+Publish a tag:
+
+```bash
+just publish-data-science-image hari31416/sandbox-data-science:py312-v1
 ```
 
 ## Example Request
@@ -205,30 +300,23 @@ curl -sS http://localhost:3000/v1/execute \
   -H 'content-type: application/json' \
   -d '{
     "session_id": "sess_demo",
-    "code": "print(2 + 2)",
+    "file_paths": ["demo/sess_demo/inputs/data.csv"],
+    "entrypoint": "demo/sess_demo/scripts/main.py",
+    "python_profile": "data-science",
+    "code": "import pandas as pd\nprint(pd.__version__)",
     "network_mode": "none"
   }'
 ```
 
 ## Design Principles
 
-- Keep runtime logic behind a small adapter interface.
-- Keep session state in MinIO, not in long-lived VMs.
-- Prefer fresh sandbox per job for simpler cleanup and retries.
-- Treat restricted Python controls as defense-in-depth, not the primary boundary.
-
-## Roadmap
-
-Planned next steps from `implementation_plan.md`:
-
-1. harden runtime adapter behavior and Docker fallback
-2. expand policy and integration test coverage
-3. improve error/reporting surfaces
-4. add optional thin Python client package
-5. prepare Linux deployment profile
+- Keep runtime logic behind a small adapter interface
+- Keep persistent state in object storage, not long-lived VMs
+- Prefer a fresh sandbox per job for simpler cleanup and retries
+- Treat Python-level restrictions as defense-in-depth, not the primary boundary
 
 ## Notes
 
-- `DockerRuntime` currently exists as a stub and is not implemented.
-- Job metadata is currently stored in memory; restart clears historical job records.
-- v1 intentionally ignores deletion propagation from workspace back to MinIO.
+- `DockerRuntime` exists as a fallback abstraction but is not the default path
+- job metadata is currently stored in memory, so restart clears historical job records
+- deletion propagation from workspace back to object storage is intentionally not implemented in v1
