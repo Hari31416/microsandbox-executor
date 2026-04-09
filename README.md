@@ -46,7 +46,7 @@ Execution flow:
 Important distinction:
 
 - Microsandbox uses OCI images like `python:3.12` or `hari31416/sandbox-data-science:py312-v1`
-- it does **not** use the Docker daemon to execute jobs when `RUNTIME=microsandbox`
+- it does **not** use the Docker daemon to execute jobs
 - it runs code in a short-lived microVM, not a normal Docker container
 
 ## Does It Require Docker?
@@ -67,7 +67,7 @@ So the split is:
 
 ## Runtime Requirements
 
-To run the executor service with `RUNTIME=microsandbox`, you need:
+To run the executor service, you need:
 
 - Node.js
 - service dependencies installed in `service/`
@@ -196,7 +196,6 @@ Core settings:
 - `HOST` (default `0.0.0.0`)
 - `PORT` (default `3000`)
 - `LOG_LEVEL` (default `info`)
-- `RUNTIME` (`microsandbox` or `docker`, default `microsandbox`)
 - `MICROSANDBOX_IMAGE` (default `python:3.12`)
 - `MICROSANDBOX_IMAGE_DATA_SCIENCE` (default `hari31416/sandbox-data-science:py312-v1`)
 - `SCRATCH_ROOT` (default `/tmp/agent-sandbox`)
@@ -317,6 +316,5 @@ curl -sS http://localhost:3000/v1/execute \
 
 ## Notes
 
-- `DockerRuntime` exists as a fallback abstraction but is not the default path
 - job metadata is currently stored in memory, so restart clears historical job records
 - deletion propagation from workspace back to object storage is intentionally not implemented in v1

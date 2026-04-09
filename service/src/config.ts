@@ -9,7 +9,6 @@ const envSchema = z.object({
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"]).default("info"),
-  RUNTIME: z.enum(["microsandbox", "docker"]).default("microsandbox"),
   MICROSANDBOX_IMAGE: z.string().min(1).default("python:3.12"),
   MICROSANDBOX_IMAGE_DATA_SCIENCE: z.string().min(1).default("hari31416/sandbox-data-science:py312-v1"),
   SCRATCH_ROOT: z.string().min(1).default("/tmp/agent-sandbox"),
@@ -77,7 +76,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     host: parsed.HOST,
     port: parsed.PORT,
     logLevel: parsed.LOG_LEVEL,
-    runtime: parsed.RUNTIME,
     runtimeImages: {
       default: parsed.MICROSANDBOX_IMAGE,
       "data-science": parsed.MICROSANDBOX_IMAGE_DATA_SCIENCE
