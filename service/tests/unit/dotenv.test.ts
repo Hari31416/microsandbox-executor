@@ -15,9 +15,10 @@ test("loadEnvFile loads configuration from an explicit .env path", async () => {
 
   await writeFile(envFile, "PORT=4310\nLOG_LEVEL=debug\n", "utf8");
 
-  const loadedPath = loadEnvFile(envFile);
+  const loadedPaths = loadEnvFile(envFile);
 
-  assert.equal(loadedPath, envFile);
+  assert.ok(Array.isArray(loadedPaths));
+  assert.equal(loadedPaths.at(-1), envFile);
   assert.equal(process.env.PORT, "4310");
   assert.equal(process.env.LOG_LEVEL, "debug");
 });

@@ -1,8 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { config as loadDotenv } from "dotenv";
+import { parse as parseDotenv } from "dotenv";
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -33,21 +33,36 @@ const envSchema = z.object({
 export type AppConfig = ReturnType<typeof loadConfig>;
 
 const SERVICE_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const DEFAULT_ENV_FILE = resolve(SERVICE_ROOT, ".env");
+const REPO_ROOT = resolve(SERVICE_ROOT, "..");
+const ROOT_ENV_FILE = resolve(REPO_ROOT, ".env");
 
 export function loadEnvFile(explicitPath = process.env.ENV_FILE) {
-  const envFilePath = explicitPath ? resolve(explicitPath) : DEFAULT_ENV_FILE;
+  const shellKeys = new Set(Object.keys(process.env));
+  const loadedPaths: string[] = [];
 
-  if (!existsSync(envFilePath)) {
-    return null;
+  applyEnvFile(ROOT_ENV_FILE, shellKeys, loadedPaths);
+
+  if (explicitPath) {
+    applyEnvFile(resolve(explicitPath), shellKeys, loadedPaths);
   }
 
-  loadDotenv({
-    path: envFilePath,
-    override: false
-  });
+  return loadedPaths;
+}
 
-  return envFilePath;
+function applyEnvFile(envFilePath: string, shellKeys: Set<string>, loadedPaths: string[]) {
+  if (!existsSync(envFilePath)) {
+    return;
+  }
+
+  const parsed = parseDotenv(readFileSync(envFilePath));
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!shellKeys.has(key)) {
+      process.env[key] = value;
+    }
+  }
+
+  loadedPaths.push(envFilePath);
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {

@@ -1,0 +1,55 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 35 67% 95%;
+    --foreground: 210 30% 16%;
+    --card: 36 76% 98%;
+    --card-foreground: 210 30% 16%;
+    --border: 27 34% 82%;
+    --input: 30 35% 84%;
+    --primary: 22 84% 57%;
+    --primary-foreground: 30 100% 99%;
+    --secondary: 197 34% 91%;
+    --secondary-foreground: 210 30% 18%;
+    --muted: 35 38% 90%;
+    --muted-foreground: 210 17% 38%;
+    --accent: 40 82% 88%;
+    --accent-foreground: 210 30% 16%;
+    --destructive: 4 74% 58%;
+    --ring: 22 84% 57%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-body text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(240, 140, 72, 0.18), transparent 34%),
+      radial-gradient(circle at bottom right, rgba(41, 108, 143, 0.16), transparent 30%),
+      linear-gradient(180deg, #fff9f2 0%, #f8efe4 100%);
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(20, 32, 44, 0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20, 32, 44, 0.045) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent 80%);
+  }
+
+  code {
+    @apply font-mono;
+  }
+}
