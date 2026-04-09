@@ -7,7 +7,7 @@ This repository contains:
 - the executor service in `service/`
 - a thin Python client in `python-client/`
 - a demo app in `demo/`
-- local infra helpers in `docker-compose.yml` and `justfile`
+- local container helpers in `service/docker-compose.yml`, `demo/docker-compose.yml`, and `justfile`
 - a local checkout of `microsandbox/`, which is the default sandbox runtime
 
 ## What This Builds
@@ -91,7 +91,6 @@ If you want to run the included demo app, you additionally need:
 ```text
 .
 ├── demo/
-├── docker-compose.yml
 ├── images/
 │   └── data-science-runtime/
 ├── implementation_plan.md
@@ -317,6 +316,14 @@ Run the executor service:
 
 ```bash
 just sandbox-dev
+```
+
+Run the containerized sandbox service:
+
+```bash
+just sandbox-build
+just sandbox-up
+just sandbox-logs
 ```
 
 Run demo infrastructure:

@@ -1,13 +1,26 @@
 set shell := ["zsh", "-cu"]
+set dotenv-load := true
 
 infra-up:
-  docker compose up -d minio minio-setup
+  docker compose -f demo/docker-compose.yml up -d minio minio-setup
 
 infra-down:
-  docker compose down
+  docker compose -f demo/docker-compose.yml down
 
 infra-logs:
-  docker compose logs -f minio
+  docker compose -f demo/docker-compose.yml logs -f minio
+
+sandbox-build:
+  docker compose --env-file service/.env.docker -f service/docker-compose.yml build sandbox-server
+
+sandbox-up:
+  docker compose --env-file service/.env.docker -f service/docker-compose.yml up -d sandbox-server
+
+sandbox-down:
+  docker compose --env-file service/.env.docker -f service/docker-compose.yml down
+
+sandbox-logs:
+  docker compose --env-file service/.env.docker -f service/docker-compose.yml logs -f sandbox-server
 
 install-service:
   cd service && bun install

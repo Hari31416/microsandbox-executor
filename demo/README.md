@@ -29,6 +29,7 @@ This demo shows the full flow:
 ## Notes
 
 - Both the sandbox service and the demo API load the shared repo-root `.env` by default.
+- `just infra-up` uses `demo/docker-compose.yml`, while the containerized sandbox service uses `service/docker-compose.yml`.
 - You can still point either process at a different file with `ENV_FILE=/path/to/file just sandbox-dev` or `ENV_FILE=/path/to/file just demo-api-dev`.
 - Default ports are still code-driven:
   - sandbox service: `3000`

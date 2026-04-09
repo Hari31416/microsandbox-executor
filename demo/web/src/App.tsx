@@ -43,6 +43,8 @@ interface ExecutionResult {
 
 const starterCode = `# Upload one or more files first.
 # The demo will suggest concrete input/output paths here.`;
+const apiBaseUrl = (import.meta.env.VITE_DEMO_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+const apiUrl = (path: string) => `${apiBaseUrl}${path}`;
 
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
@@ -92,7 +94,7 @@ export default function App() {
         formData.append("files", file)
       })
 
-      const response = await fetch("/api/uploads", {
+      const response = await fetch(apiUrl("/api/uploads"), {
         method: "POST",
         body: formData
       })
@@ -129,7 +131,7 @@ export default function App() {
     setActiveTab("output")
 
     try {
-      const response = await fetch("/api/execute", {
+      const response = await fetch(apiUrl("/api/execute"), {
         method: "POST",
         headers: {
           "content-type": "application/json"

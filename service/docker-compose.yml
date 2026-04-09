@@ -1,0 +1,17 @@
+services:
+  sandbox-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: ${PORT:-3000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      MICROSANDBOX_IMAGE: ${MICROSANDBOX_IMAGE:-python:3.12}
+      MICROSANDBOX_IMAGE_DATA_SCIENCE: ${MICROSANDBOX_IMAGE_DATA_SCIENCE:-hari31416/sandbox-data-science:py312-v1}
+      ENABLE_RESTRICTED_EXEC: ${ENABLE_RESTRICTED_EXEC:-false}
+      RESTRICTED_EXEC_BLOCKED_IMPORTS: ${RESTRICTED_EXEC_BLOCKED_IMPORTS:-subprocess,socket,multiprocessing,resource,pty}
+    ports:
+      - "${PORT:-3000}:3000"
+    privileged: true
+    restart: unless-stopped
