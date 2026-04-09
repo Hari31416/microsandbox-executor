@@ -9,6 +9,16 @@ export class MicrosandboxRuntime implements SandboxRuntime {
       throw new Error("microsandbox runtime is not installed. Install it before executing jobs.");
     }
 
+    console.info("[microsandbox] creating sandbox", {
+      sandboxName: input.sandboxName,
+      image: input.image,
+      workspaceHostPath: input.workspaceHostPath,
+      guestWorkspacePath: input.guestWorkspacePath,
+      cpuLimit: input.cpuLimit,
+      memoryMb: input.memoryMb,
+      networkMode: input.networkMode
+    });
+    const createStartedAt = Date.now();
     const sandbox = await Sandbox.create({
       name: input.sandboxName,
       image: input.image,
@@ -25,10 +35,21 @@ export class MicrosandboxRuntime implements SandboxRuntime {
       },
       network: buildNetworkConfig(input.networkMode, input.allowedHosts)
     });
+    console.info("[microsandbox] sandbox ready", {
+      sandboxName: input.sandboxName,
+      image: input.image,
+      createDurationMs: Date.now() - createStartedAt
+    });
 
     const startedAt = Date.now();
 
     try {
+      console.info("[microsandbox] starting command", {
+        sandboxName: input.sandboxName,
+        command: input.command,
+        args: input.args,
+        timeoutMs: input.timeoutMs
+      });
       const output = await sandbox.execWithConfig({
         cmd: input.command,
         args: input.args,
@@ -37,13 +58,28 @@ export class MicrosandboxRuntime implements SandboxRuntime {
         timeoutMs: input.timeoutMs
       });
 
+      console.info("[microsandbox] command finished", {
+        sandboxName: input.sandboxName,
+        exitCode: output.code,
+        durationMs: Date.now() - startedAt
+      });
+
       return {
         exitCode: output.code,
         stdout: output.stdout(),
         stderr: output.stderr(),
         durationMs: Date.now() - startedAt
       };
+    } catch (error) {
+      console.error("[microsandbox] command failed", {
+        sandboxName: input.sandboxName,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+      throw error;
     } finally {
+      console.info("[microsandbox] cleaning sandbox", {
+        sandboxName: input.sandboxName
+      });
       await this.cleanupSandbox(sandbox, input.sandboxName);
     }
   }
@@ -89,5 +125,9 @@ export class MicrosandboxRuntime implements SandboxRuntime {
     } catch {
       // Ignore missing or already-removed sandbox records.
     }
+
+    console.info("[microsandbox] sandbox cleaned", {
+      sandboxName
+    });
   }
 }

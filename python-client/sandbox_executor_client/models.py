@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 JobStatus = Literal["queued", "running", "completed", "failed"]
 NetworkMode = Literal["none", "allowlist", "public"]
+PythonProfile = Literal["default", "data-science"]
 
 
 @dataclass(slots=True)
@@ -15,6 +16,7 @@ class ExecuteRequest:
     code: str
     job_id: str | None = None
     entrypoint: str = "main.py"
+    python_profile: PythonProfile = "default"
     timeout_seconds: int | None = None
     cpu_limit: int | None = None
     memory_mb: int | None = None
@@ -29,6 +31,7 @@ class ExecuteRequest:
             "file_paths": self.file_paths,
             "code": self.code,
             "entrypoint": self.entrypoint,
+            "python_profile": self.python_profile,
             "network_mode": self.network_mode,
             "allowed_hosts": self.allowed_hosts,
             "environment": self.environment,

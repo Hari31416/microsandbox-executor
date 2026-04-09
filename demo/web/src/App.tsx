@@ -50,6 +50,7 @@ export default function App() {
   const [filePaths, setFilePaths] = useState<string[]>([])
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [entrypoint, setEntrypoint] = useState("main.py")
+  const [pythonProfile, setPythonProfile] = useState<"default" | "data-science">("default")
   const [suggestedOutputPath, setSuggestedOutputPath] = useState("")
   const [code, setCode] = useState(starterCode)
   const [result, setResult] = useState<ExecutionResult | null>(null)
@@ -137,6 +138,7 @@ export default function App() {
           sessionId,
           filePaths,
           entrypoint,
+          pythonProfile,
           code
         })
       })
@@ -284,9 +286,9 @@ export default function App() {
 
               <section>
                 <Label className="text-[10px] uppercase text-muted-foreground tracking-widest px-1">Script Path</Label>
-                <div className="mt-1 flex items-center justify-between rounded-md border bg-accent/30 p-2">
-                  <code className="truncate text-[10px] font-mono text-foreground">
-                    {entrypoint}
+                  <div className="mt-1 flex items-center justify-between rounded-md border bg-accent/30 p-2">
+                    <code className="truncate text-[10px] font-mono text-foreground">
+                      {entrypoint}
                   </code>
                   <Button
                     variant="ghost"
@@ -295,6 +297,28 @@ export default function App() {
                     onClick={() => void copy(entrypoint)}
                   >
                     <Copy className="h-3 w-3" />
+                  </Button>
+                  </div>
+                </section>
+
+              <section>
+                <Label className="text-[10px] uppercase text-muted-foreground tracking-widest px-1">Python Profile</Label>
+                <div className="mt-1 grid grid-cols-2 gap-2">
+                  <Button
+                    variant={pythonProfile === "default" ? "default" : "secondary"}
+                    size="sm"
+                    className="h-8 text-[10px]"
+                    onClick={() => setPythonProfile("default")}
+                  >
+                    Core
+                  </Button>
+                  <Button
+                    variant={pythonProfile === "data-science" ? "default" : "secondary"}
+                    size="sm"
+                    className="h-8 text-[10px]"
+                    onClick={() => setPythonProfile("data-science")}
+                  >
+                    NumPy + pandas
                   </Button>
                 </div>
               </section>

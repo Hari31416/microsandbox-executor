@@ -18,7 +18,17 @@ export class JobExecutor {
 
   async execute(request: ExecuteRequest) {
     const jobId = request.jobId ?? createJobId();
+    const runtimeImage = this.resolveRuntimeImage(request.pythonProfile);
     this.validateRequest(request);
+
+    console.info("[executor] starting job", {
+      jobId,
+      sessionId: request.sessionId,
+      pythonProfile: request.pythonProfile,
+      image: runtimeImage,
+      entrypoint: request.entrypoint,
+      fileCount: request.filePaths.length
+    });
 
     this.jobStore.create(jobId, {
       ...request,
@@ -29,6 +39,10 @@ export class JobExecutor {
     const workspace = await createJobWorkspace(this.config.scratchRoot, request.sessionId, jobId);
 
     try {
+      console.info("[executor] staging workspace files", {
+        jobId,
+        workspacePath: workspace.workspacePath
+      });
       await this.sync.stageFiles(request.filePaths, workspace.workspacePath);
       const beforeManifest = await captureManifest(workspace.workspacePath);
 
@@ -40,9 +54,17 @@ export class JobExecutor {
         blockedImports: this.config.blockedImports
       });
 
+      console.info("[executor] launching runtime", {
+        jobId,
+        sandboxName: createSandboxName(jobId),
+        image: runtimeImage,
+        timeoutSeconds: request.timeoutSeconds ?? this.config.defaultTimeoutSeconds,
+        cpuLimit: request.cpuLimit ?? this.config.defaultCpuLimit,
+        memoryMb: request.memoryMb ?? this.config.defaultMemoryMb
+      });
       const runtimeResult = await this.runtime.executeJob({
         sandboxName: createSandboxName(jobId),
-        image: this.config.defaultImage,
+        image: runtimeImage,
         workspaceHostPath: workspace.workspacePath,
         guestWorkspacePath: this.config.guestWorkspacePath,
         command: preparedExecution.command,
@@ -59,6 +81,13 @@ export class JobExecutor {
       const diff = diffManifests(beforeManifest, afterManifest);
       const uploadedFiles = await this.sync.persistFiles(workspace.workspacePath, diff.changedFiles);
 
+      console.info("[executor] completed job", {
+        jobId,
+        exitCode: runtimeResult.exitCode,
+        durationMs: runtimeResult.durationMs,
+        uploadedFileCount: uploadedFiles.length
+      });
+
       return this.jobStore.complete(jobId, {
         exitCode: runtimeResult.exitCode,
         stdout: runtimeResult.stdout,
@@ -67,8 +96,16 @@ export class JobExecutor {
         filesUploaded: uploadedFiles
       });
     } catch (error) {
+      console.error("[executor] job failed", {
+        jobId,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
       return this.jobStore.fail(jobId, error);
     } finally {
+      console.info("[executor] cleaning workspace", {
+        jobId,
+        jobRoot: workspace.jobRoot
+      });
       await cleanupJobWorkspace(workspace.jobRoot);
     }
   }
@@ -89,5 +126,9 @@ export class JobExecutor {
     if ((request.memoryMb ?? this.config.defaultMemoryMb) > this.config.maxMemoryMb) {
       throw new Error(`memory_mb exceeds max allowed value of ${this.config.maxMemoryMb}`);
     }
+  }
+
+  private resolveRuntimeImage(profile: ExecuteRequest["pythonProfile"]) {
+    return this.config.runtimeImages[profile ?? "default"] ?? this.config.runtimeImages.default;
   }
 }

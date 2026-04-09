@@ -11,6 +11,7 @@ test("executeRequestSchema accepts bucket-relative file paths", () => {
   });
 
   assert.deepEqual(parsed.filePaths, ["inputs/example.txt", "nested/data.csv"]);
+  assert.equal(parsed.pythonProfile, "default");
 });
 
 test("executeRequestSchema rejects unsafe file paths", () => {
@@ -21,4 +22,15 @@ test("executeRequestSchema rejects unsafe file paths", () => {
   });
 
   assert.equal(result.success, false);
+});
+
+test("executeRequestSchema accepts data-science python profile", () => {
+  const parsed = executeRequestSchema.parse({
+    session_id: "sess_123",
+    file_paths: ["inputs/example.txt"],
+    python_profile: "data-science",
+    code: "import pandas as pd"
+  });
+
+  assert.equal(parsed.pythonProfile, "data-science");
 });

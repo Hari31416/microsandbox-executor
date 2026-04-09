@@ -13,6 +13,7 @@ const executeRequestSchema = z.object({
   sessionId: z.string().min(1),
   filePaths: z.array(z.string().min(1)).min(1),
   entrypoint: z.string().min(1),
+  pythonProfile: z.enum(["default", "data-science"]).default("default"),
   code: z.string().min(1)
 });
 
@@ -106,6 +107,7 @@ async function main() {
       session_id: payload.sessionId,
       file_paths: payload.filePaths,
       entrypoint: payload.entrypoint,
+      python_profile: payload.pythonProfile,
       code: payload.code
     });
 

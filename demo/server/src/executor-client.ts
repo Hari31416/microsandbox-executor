@@ -39,6 +39,7 @@ export class ExecutorClient {
     file_paths: string[];
     code: string;
     entrypoint?: string;
+    python_profile?: "default" | "data-science";
     network_mode?: "none" | "allowlist" | "public";
     allowed_hosts?: string[];
   }) {

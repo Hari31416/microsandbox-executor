@@ -9,6 +9,7 @@ class SandboxExecutorClientTests(unittest.TestCase):
             session_id="sess_123",
             file_paths=["inputs/example.txt"],
             code="print('hello')",
+            python_profile="data-science",
             timeout_seconds=30,
             network_mode="allowlist",
             allowed_hosts=["api.openai.com"],
@@ -19,6 +20,7 @@ class SandboxExecutorClientTests(unittest.TestCase):
         self.assertEqual(payload["session_id"], "sess_123")
         self.assertEqual(payload["file_paths"], ["inputs/example.txt"])
         self.assertEqual(payload["code"], "print('hello')")
+        self.assertEqual(payload["python_profile"], "data-science")
         self.assertEqual(payload["timeout_seconds"], 30)
         self.assertEqual(payload["network_mode"], "allowlist")
         self.assertEqual(payload["allowed_hosts"], ["api.openai.com"])
