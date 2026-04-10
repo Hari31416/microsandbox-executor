@@ -82,7 +82,12 @@ export class JobExecutor {
 
       const afterManifest = await captureManifest(workspace.workspacePath, preparedExecution.ignoredRelativePrefixes);
       const diff = diffManifests(beforeManifest, afterManifest);
-      const uploadedFiles = await this.sync.persistFiles(workspace.workspacePath, diff.changedFiles);
+      const uploadedFiles = await this.sync.persistFiles(
+        workspace.workspacePath,
+        request.sessionId,
+        request.filePaths,
+        diff.changedFiles
+      );
 
       console.info("[executor] completed job", {
         timestamp: new Date().toISOString(),

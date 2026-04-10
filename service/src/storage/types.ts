@@ -4,8 +4,13 @@ export interface StorageHealth {
   details: string;
 }
 
+export interface UploadSpec {
+  localPath: string;
+  objectKey: string;
+}
+
 export interface SessionStorage {
   healthCheck(): Promise<StorageHealth>;
   downloadFiles(filePaths: string[], workspacePath: string): Promise<string[]>;
-  uploadFiles(workspacePath: string, relativePaths: string[]): Promise<string[]>;
+  uploadFiles(workspacePath: string, uploads: UploadSpec[]): Promise<string[]>;
 }

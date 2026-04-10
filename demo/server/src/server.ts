@@ -84,20 +84,21 @@ async function main() {
     }
 
     const sessionRoot = `${config.demoPrefix}/${sessionId}`;
-    const suggestedEntrypoint = `${sessionRoot}/scripts/main.py`;
+    const suggestedEntrypoint = "main.py";
     const csvFile = uploads.find((file) => file.name.toLowerCase().endsWith(".csv"));
-    const suggestedOutputPath = csvFile
-      ? `${sessionRoot}/outputs/${csvFile.name.split(".")[0]}-metadata.txt`
-      : `${sessionRoot}/outputs/result${pickDefaultExtension(uploads[0]?.name ?? "")}`;
+    const suggestedOutputPath = csvFile ? `${filenameStem(csvFile.name)}_cleaned.csv` : `result${pickDefaultExtension(uploads[0]?.name ?? "")}`;
 
     return {
       sessionId,
       sessionRoot,
       suggestedEntrypoint,
       filePaths: uploads.map((file) => file.key),
-      files: uploads,
+      files: uploads.map((file) => ({
+        ...file,
+        workspacePath: file.name
+      })),
       suggestedOutputPath,
-      suggestedCode: buildSuggestedCode(uploads.map((file) => file.key), suggestedOutputPath)
+      suggestedCode: buildSuggestedCode(uploads.map((file) => file.name), suggestedOutputPath)
     };
   });
 
@@ -152,26 +153,25 @@ from pathlib import Path
 input_path = Path(${inputPath})
 output_path = Path(${outputLiteral})
 
-# Load the CSV data using pandas
+# Load the CSV from the workspace root
 print(f"Reading dataset: {input_path.name}")
 df = pd.read_csv(input_path)
 
-# Print dataset information to the console
-print("\\n--- DataFrame Info ---")
-print(df.info())
+# Example cleanup: drop fully empty rows and normalize column names
+cleaned = df.dropna(how="all").copy()
+cleaned.columns = [str(column).strip().lower().replace(" ", "_") for column in cleaned.columns]
 
-print("\\n--- Column Names ---")
-print(df.columns.tolist())
+print("\\n--- Preview ---")
+print(cleaned.head())
 
-# Save column metadata to the output file
+print("\\nRows:", len(cleaned))
+print("Columns:", cleaned.columns.tolist())
+
+# Saving to a short local path is enough. The executor will sync it to the session's outputs prefix.
 output_path.parent.mkdir(parents=True, exist_ok=True)
-with open(output_path, "w", encoding="utf-8") as f:
-    f.write(f"Schema for {input_path.name}\\n")
-    f.write("=" * 40 + "\\n")
-    for col in df.columns:
-        f.write(f"Column: {col:20} Type: {str(df[col].dtype)}\\n")
+cleaned.to_csv(output_path, index=False)
 
-print(f"\\nColumn metadata successfully saved to {output_path}")
+print(f"\\nCleaned dataset successfully saved to {output_path}")
 `;
   }
 
@@ -200,6 +200,11 @@ function sanitizeFilename(filename: string) {
 function pickDefaultExtension(filename: string) {
   const extension = extname(filename);
   return extension || ".txt";
+}
+
+function filenameStem(filename: string) {
+  const extension = extname(filename);
+  return extension ? filename.slice(0, -extension.length) : filename;
 }
 
 function basenameFromKey(key: string) {

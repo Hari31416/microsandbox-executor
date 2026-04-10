@@ -10,7 +10,7 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 
 import type { AppConfig } from "../config.js";
 import { normalizeRelativePath, resolveWithin, writeStreamToFile } from "../util/fs.js";
-import type { SessionStorage, StorageHealth } from "./types.js";
+import type { SessionStorage, StorageHealth, UploadSpec } from "./types.js";
 
 type S3CompatibleClient = S3Client | null;
 
@@ -85,21 +85,22 @@ export class S3SessionStorage implements SessionStorage {
     return downloadedFiles;
   }
 
-  async uploadFiles(workspacePath: string, relativePaths: string[]) {
-    if (!this.client || relativePaths.length === 0) {
+  async uploadFiles(workspacePath: string, uploads: UploadSpec[]) {
+    if (!this.client || uploads.length === 0) {
       return [];
     }
 
     const uploaded: string[] = [];
 
-    for (const relativePath of relativePaths) {
-      const objectKey = normalizeRelativePath(relativePath);
+    for (const upload of uploads) {
+      const localPath = normalizeRelativePath(upload.localPath);
+      const objectKey = normalizeRelativePath(upload.objectKey);
 
       await this.client.send(
         new PutObjectCommand({
           Bucket: this.config.bucket!,
           Key: objectKey,
-          Body: createReadStream(resolveWithin(workspacePath, objectKey))
+          Body: createReadStream(resolveWithin(workspacePath, localPath))
         })
       );
 

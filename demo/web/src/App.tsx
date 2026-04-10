@@ -15,6 +15,7 @@ import Editor from "react-simple-code-editor";
 interface UploadedFile {
   name: string;
   key: string;
+  workspacePath: string;
   size: number;
   contentType?: string;
 }
@@ -260,14 +261,14 @@ export default function App() {
                             <div className="flex min-w-0 flex-col gap-0.5">
                               <span className="truncate text-xs font-medium">{file.name}</span>
                               <span className="truncate text-[10px] font-mono text-muted-foreground opacity-70">
-                                {file.key}
+                                {file.workspacePath}
                               </span>
                             </div>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                              onClick={() => void copy(file.key)}
+                              onClick={() => void copy(file.workspacePath)}
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
