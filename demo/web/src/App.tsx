@@ -1,16 +1,11 @@
 import { Copy, FileCode2, FlaskConical, LoaderCircle, Play, UploadCloud } from "lucide-react";
 import { useMemo, useState } from "react";
+import Editor from "@monaco-editor/react";
 
 import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
-import { Separator } from "./components/ui/separator";
-
-import Prism from "prismjs";
-import "prismjs/components/prism-python";
-import "prismjs/themes/prism-tomorrow.css";
-import Editor from "react-simple-code-editor";
 
 interface UploadedFile {
   name: string;
@@ -42,8 +37,6 @@ interface ExecutionResult {
   downloads: Array<{ key: string; url: string }>;
 }
 
-const starterCode = `# Upload one or more files first.
-# The demo will suggest concrete input/output paths here.`;
 const apiBaseUrl = (import.meta.env.VITE_DEMO_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
 const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -59,23 +52,114 @@ const apiUrl = (path: string) => {
   return `${apiBaseUrl}${normalizedPath}`;
 };
 
-export default function App() {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [sessionId, setSessionId] = useState("")
-  const [filePaths, setFilePaths] = useState<string[]>([])
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [entrypoint, setEntrypoint] = useState("main.py")
-  const [pythonProfile, setPythonProfile] = useState<"default" | "data-science">("default")
-  const [suggestedOutputPath, setSuggestedOutputPath] = useState("")
-  const [code, setCode] = useState(starterCode)
-  const [result, setResult] = useState<ExecutionResult | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [running, setRunning] = useState(false)
-  const [statusMessage, setStatusMessage] = useState("Upload source files to create a runnable workspace.")
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"output" | "status" | "files">("output")
+function generateSnippetForFiles(files: UploadedFile[]): { code: string; entrypoint: string; outputPath: string; profile: "default" | "data-science" } {
+  const csvFile = files.find((f) => f.name.toLowerCase().endsWith(".csv"));
+  const txtFile = files.find((f) => f.name.toLowerCase().endsWith(".txt"));
 
-  const readyToRun = sessionId.length > 0 && filePaths.length > 0 && code.trim().length > 0 && !running
+  if (csvFile) {
+    return {
+      code: `import pandas as pd
+import os
+
+input_path = "${csvFile.name}"
+output_path = "./transformed_data.csv"
+
+# Read the CSV with Pandas
+df = pd.read_csv(input_path)
+
+# Example transformation: Lowercase all column names
+df.columns = [col.lower() for col in df.columns]
+# Add a new column
+df['processed'] = True
+
+# Ensure output directory exists (though sandbox handles this)
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+# Save result back to object store
+df.to_csv(output_path, index=False)
+
+print(f"Data transformed and saved to {output_path}")
+print("Head of new data:")
+print(df.head())
+`,
+      entrypoint: "transform.py",
+      outputPath: "./transformed_data.csv",
+      profile: "data-science"
+    };
+  }
+
+  if (txtFile) {
+    return {
+      code: `import os
+
+input_path = "${txtFile.name}"
+output_path = "./processed.txt"
+
+with open(input_path, 'r', encoding='utf-8') as f:
+    text = f.read()
+
+# Example transformation: Uppercase the text and count characters
+processed_text = text.upper()
+char_count = len(processed_text)
+
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+with open(output_path, 'w', encoding='utf-8') as f:
+    f.write(processed_text)
+
+print(f"File processed. Original length: {len(text)}. New length: {char_count}.")
+print(f"Output saved to {output_path}")
+`,
+      entrypoint: "process_text.py",
+      outputPath: "./processed.txt",
+      profile: "default"
+    };
+  }
+
+  // Fallback
+  return {
+    code: `import os
+
+input_dir = "./"
+output_path = "./available_files.txt"
+
+files = os.listdir(input_dir) if os.path.exists(input_dir) else []
+
+os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+with open(output_path, 'w', encoding='utf-8') as f:
+    f.write("Available files:\\n")
+    for file in files:
+        f.write(f"- {file}\\n")
+
+print(f"Listed {len(files)} files and saved to {output_path}")
+`,
+    entrypoint: "main.py",
+    outputPath: "./available_files.txt",
+    profile: "default"
+  };
+}
+
+const starterCode = `# Upload one or more files first.
+# The code structure will auto-adapt based on file type.`;
+
+export default function App() {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [sessionId, setSessionId] = useState("");
+  const [filePaths, setFilePaths] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [entrypoint, setEntrypoint] = useState("main.py");
+  const [pythonProfile, setPythonProfile] = useState<"default" | "data-science">("default");
+  const [suggestedOutputPath, setSuggestedOutputPath] = useState("");
+  const [code, setCode] = useState(starterCode);
+  const [result, setResult] = useState<ExecutionResult | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("Upload source files to create a runnable workspace.");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"output" | "files">("output");
+
+  const readyToRun = sessionId.length > 0 && filePaths.length > 0 && code.trim().length > 0 && !running;
 
   const displayFiles = useMemo(
     () =>
@@ -84,64 +168,69 @@ export default function App() {
         sizeLabel: file.size > 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`
       })),
     [uploadedFiles]
-  )
+  );
 
   async function handleUpload() {
     if (selectedFiles.length === 0) {
-      setErrorMessage("Choose at least one input file first.")
-      return
+      setErrorMessage("Choose at least one input file first.");
+      return;
     }
 
-    setUploading(true)
-    setErrorMessage(null)
-    setStatusMessage("Uploading files into the object store and preparing a session...")
+    setUploading(true);
+    setErrorMessage(null);
+    setStatusMessage("Uploading files into the object store and preparing a session...");
 
     try {
-      const formData = new FormData()
+      const formData = new FormData();
 
       if (sessionId) {
-        formData.append("sessionId", sessionId)
+        formData.append("sessionId", sessionId);
       }
 
       selectedFiles.forEach((file) => {
-        formData.append("files", file)
-      })
+        formData.append("files", file);
+      });
 
       const response = await fetch(apiUrl("/api/uploads"), {
         method: "POST",
         body: formData
-      })
-      const payload = (await response.json()) as UploadResponse | { error?: string }
+      });
+      const payload = (await response.json()) as UploadResponse | { error?: string };
 
       if (!response.ok) {
-        throw new Error(typeof payload === "object" && payload && "error" in payload ? payload.error : "Upload failed")
+        throw new Error(typeof payload === "object" && payload && "error" in payload ? payload.error : "Upload failed");
       }
 
-      const upload = payload as UploadResponse
-      setSessionId(upload.sessionId)
-      setFilePaths(upload.filePaths)
-      setUploadedFiles(upload.files)
-      setEntrypoint(upload.suggestedEntrypoint)
-      setSuggestedOutputPath(upload.suggestedOutputPath)
-      setCode(upload.suggestedCode)
-      setResult(null)
-      setStatusMessage(`Session ${upload.sessionId} is ready. Adjust the Python and run the transformation.`)
+      const upload = payload as UploadResponse;
+      setSessionId(upload.sessionId);
+      setFilePaths(upload.filePaths);
+      setUploadedFiles(upload.files);
+
+      // Override the backend suggestions with our specialized frontend generation
+      const snippet = generateSnippetForFiles(upload.files);
+      setEntrypoint(snippet.entrypoint);
+      setSuggestedOutputPath(snippet.outputPath);
+      setCode(snippet.code);
+      setPythonProfile(snippet.profile);
+
+      setResult(null);
+      setStatusMessage(`Session ${upload.sessionId} is ready. Automatically applied ${snippet.profile} profile.`);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Upload failed")
+      setErrorMessage(error instanceof Error ? error.message : "Upload failed");
     } finally {
-      setUploading(false)
+      setUploading(false);
     }
   }
 
   async function handleRun() {
     if (!readyToRun) {
-      return
+      return;
     }
 
-    setRunning(true)
-    setErrorMessage(null)
-    setStatusMessage("Launching a fresh sandbox and streaming your workspace into it...")
-    setActiveTab("output")
+    setRunning(true);
+    setErrorMessage(null);
+    setStatusMessage("Launching a fresh sandbox and streaming your workspace into it...");
+    setActiveTab("output");
 
     try {
       const response = await fetch(apiUrl("/api/execute"), {
@@ -156,54 +245,54 @@ export default function App() {
           pythonProfile,
           code
         })
-      })
+      });
 
-      const payload = (await response.json()) as ExecutionResult | { error?: string }
+      const payload = (await response.json()) as ExecutionResult | { error?: string };
 
       if (!response.ok) {
-        throw new Error(typeof payload === "object" && payload && "error" in payload ? payload.error : "Execution failed")
+        throw new Error(typeof payload === "object" && payload && "error" in payload ? payload.error : "Execution failed");
       }
 
-      const execution = payload as ExecutionResult
-      setResult(execution)
+      const execution = payload as ExecutionResult;
+      setResult(execution);
       setStatusMessage(
         execution.exit_code === 0
           ? "Execution completed. Any new or changed files were pushed back to object storage."
           : "Execution finished with errors. Review stderr and adjust the code."
-      )
+      );
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Execution failed")
+      setErrorMessage(error instanceof Error ? error.message : "Execution failed");
     } finally {
-      setRunning(false)
+      setRunning(false);
     }
   }
 
   async function copy(text: string) {
-    await navigator.clipboard.writeText(text)
-    setStatusMessage(`Copied ${text}`)
+    await navigator.clipboard.writeText(text);
+    setStatusMessage(`Copied ${text}`);
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#1e1e1e] text-slate-300 font-sans">
       {/* Top Header */}
-      <header className="flex h-14 items-center justify-between border-b px-6 bg-card shadow-sm">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-[#181818] px-6 shadow-sm z-10">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <FlaskConical className="h-5 w-5 text-primary" />
-            <h1 className="font-display text-xl font-bold tracking-tight">Field Lab</h1>
+            <FlaskConical className="h-5 w-5 hover:rotate-12 transition-transform text-emerald-500" />
+            <h1 className="text-sm font-semibold tracking-wide text-white">FIELD LAB</h1>
           </div>
-          <div className="h-6 w-px bg-border" />
-          <div className="flex items-center gap-2 text-sm">
-            <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-wider">
-              {sessionId || "No Session"}
-            </Badge>
+          <div className="h-6 w-px bg-white/10" />
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <span className="font-mono text-[10px] uppercase tracking-wider">
+              {sessionId || "NO ACTIVE SESSION"}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <Button
             size="sm"
-            className="h-8 gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+            className="h-8 gap-2 bg-emerald-600 text-white hover:bg-emerald-500 transition-colors shadow-none rounded-sm px-4"
             onClick={handleRun}
             disabled={!readyToRun || running}
           >
@@ -215,63 +304,57 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="flex w-[320px] flex-col border-r bg-card/50">
+        <aside className="flex w-[260px] lg:w-[300px] flex-col border-r border-white/5 bg-[#181818] z-10">
           <div className="flex flex-col flex-1 overflow-hidden">
-            <div className="p-4 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
+            <div className="p-4 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+
               <section>
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Workspace</h2>
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Explorer</h2>
                 </div>
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-dashed border-border p-4 bg-background/50">
-                    <div className="mb-3 flex items-center gap-2">
-                      <UploadCloud className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">Add Files</span>
+                  <div className="rounded border border-dashed border-white/10 p-4 bg-[#1e1e1e] hover:bg-[#252525] transition-colors">
+                    <div className="mb-3 flex items-center gap-2 text-slate-300">
+                      <UploadCloud className="h-4 w-4 text-emerald-500" />
+                      <span className="text-xs font-semibold">Workspace Inputs</span>
                     </div>
                     <Input
                       id="files"
                       type="file"
                       multiple
-                      className="h-8 text-[11px] mb-3"
+                      className="h-8 text-[11px] mb-3 bg-[#1e1e1e] border-white/10 text-slate-300 file:text-emerald-400 file:font-medium hover:border-emerald-500/50 transition-colors cursor-pointer rounded-sm"
                       onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
                     />
                     <Button
                       size="sm"
-                      className="w-full h-8 text-xs"
-                      variant="secondary"
+                      className="w-full h-8 text-[11px] font-semibold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-sm"
                       onClick={handleUpload}
-                      disabled={uploading}
+                      disabled={uploading || selectedFiles.length === 0}
                     >
                       {uploading ? <LoaderCircle className="mr-2 h-3 w-3 animate-spin" /> : null}
-                      Upload to Sandbox
+                      Upload & Generate
                     </Button>
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-[10px] uppercase text-muted-foreground tracking-widest px-1">Active Files</Label>
-                    <div className="space-y-1">
+                    <Label className="text-[9px] font-bold uppercase text-slate-500 px-1 tracking-wider">Mounted Files</Label>
+                    <div className="space-y-1 mt-1">
                       {displayFiles.length === 0 ? (
-                        <p className="px-1 text-xs text-muted-foreground italic">No files available</p>
+                        <p className="px-1 text-[11px] text-slate-600 italic">No files available</p>
                       ) : (
                         displayFiles.map((file) => (
                           <div
                             key={file.key}
-                            className="group flex items-center justify-between rounded-md p-2 hover:bg-accent transition-colors"
+                            className="group flex flex-col gap-0.5 rounded p-1.5 hover:bg-[#2a2a2a] transition-all cursor-pointer"
+                            onClick={() => void copy(file.workspacePath)}
                           >
-                            <div className="flex min-w-0 flex-col gap-0.5">
-                              <span className="truncate text-xs font-medium">{file.name}</span>
-                              <span className="truncate text-[10px] font-mono text-muted-foreground opacity-70">
-                                {file.workspacePath}
-                              </span>
+                            <div className="flex items-center justify-between">
+                              <span className="truncate text-xs text-slate-300 font-medium">{file.name}</span>
+                              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 text-slate-500" />
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                              onClick={() => void copy(file.workspacePath)}
-                            >
-                              <Copy className="h-3 w-3" />
-                            </Button>
+                            <span className="truncate text-[9px] font-mono text-slate-500 group-hover:text-emerald-400/80 transition-colors">
+                              {file.workspacePath}
+                            </span>
                           </div>
                         ))
                       )}
@@ -282,178 +365,150 @@ export default function App() {
 
               {suggestedOutputPath && (
                 <section>
-                  <Label className="text-[10px] uppercase text-muted-foreground tracking-widest px-1">Suggested Output</Label>
-                  <div className="mt-1 flex items-center justify-between rounded-md border bg-accent/30 p-2">
-                    <code className="truncate text-[10px] font-mono text-foreground">
+                  <Label className="text-[9px] font-bold uppercase text-slate-500 px-1 tracking-wider">Output Target</Label>
+                  <div className="mt-1 flex items-center justify-between rounded border border-white/5 bg-[#141414] p-2 hover:border-emerald-500/30 transition-colors group cursor-pointer" onClick={() => void copy(suggestedOutputPath)}>
+                    <code className="truncate text-[10px] font-mono text-emerald-400/90">
                       {suggestedOutputPath}
                     </code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 shrink-0"
-                      onClick={() => void copy(suggestedOutputPath)}
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
+                    <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 text-slate-500" />
                   </div>
                 </section>
               )}
 
               <section>
-                <Label className="text-[10px] uppercase text-muted-foreground tracking-widest px-1">Script Path</Label>
-                  <div className="mt-1 flex items-center justify-between rounded-md border bg-accent/30 p-2">
-                    <code className="truncate text-[10px] font-mono text-foreground">
+                <Label className="text-[9px] font-bold uppercase text-slate-500 px-1 tracking-wider">Runtime Config</Label>
+                <div className="mt-1 space-y-2">
+                  <div className="flex items-center justify-between rounded border border-white/5 bg-[#141414] p-2 group cursor-pointer hover:border-emerald-500/30 transition-colors" onClick={() => void copy(entrypoint)}>
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">ENTRY</span>
+                    <code className="truncate text-[10px] font-mono text-emerald-400/90">
                       {entrypoint}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 shrink-0"
-                    onClick={() => void copy(entrypoint)}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
+                    </code>
                   </div>
-                </section>
-
-              <section>
-                <Label className="text-[10px] uppercase text-muted-foreground tracking-widest px-1">Python Profile</Label>
-                <div className="mt-1 grid grid-cols-2 gap-2">
-                  <Button
-                    variant={pythonProfile === "default" ? "default" : "secondary"}
-                    size="sm"
-                    className="h-8 text-[10px]"
-                    onClick={() => setPythonProfile("default")}
-                  >
-                    Core
-                  </Button>
-                  <Button
-                    variant={pythonProfile === "data-science" ? "default" : "secondary"}
-                    size="sm"
-                    className="h-8 text-[10px]"
-                    onClick={() => setPythonProfile("data-science")}
-                  >
-                    NumPy + pandas
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 text-[10px] rounded-sm transition-colors border ${pythonProfile === "default" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-transparent border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"}`}
+                      onClick={() => setPythonProfile("default")}
+                    >
+                      Core 3.11
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 text-[10px] rounded-sm transition-colors border ${pythonProfile === "data-science" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-transparent border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"}`}
+                      onClick={() => setPythonProfile("data-science")}
+                    >
+                      Data Science
+                    </Button>
+                  </div>
                 </div>
               </section>
             </div>
 
-            <div className="mt-auto border-t p-4 bg-muted/20">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge variant="outline" className="text-[10px] bg-background/50">Worker Console</Badge>
-                </div>
-                <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  {statusMessage}
-                </p>
-                {errorMessage && (
-                  <div className="mt-2 rounded-md bg-destructive/10 p-2 text-[10px] text-destructive border border-destructive/20 font-medium">
-                    {errorMessage}
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="flex flex-1 flex-col overflow-hidden pr-6 py-4 gap-4">
-          {/* Editor Section */}
-          <div className="flex flex-[1.5] flex-col overflow-hidden bg-[#0d151e] shadow-ide rounded-xl border border-white/5">
-            <div className="flex h-10 items-center justify-between px-4 border-b border-white/5 bg-white/[0.02]">
-              <div className="flex items-center gap-2">
-                <FileCode2 className="h-3.5 w-3.5 text-primary/80" />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{entrypoint}</span>
-              </div>
-              <div className="flex items-center gap-4 text-[10px] text-slate-500 font-mono">
-                <span className="flex items-center gap-1"><div className="h-1.5 w-1.5 rounded-full bg-emerald-500/50" /> UTF-8</span>
-                <span>Python 3.11</span>
+        {/* Main Workspace Area */}
+        <main className="flex flex-1 flex-col overflow-hidden bg-[#1e1e1e]">
+          {/* Editor Panel */}
+          <div className="flex flex-[2] flex-col overflow-hidden relative">
+            <div className="flex h-9 items-center px-4 bg-[#1e1e1e] border-b border-black/20 shadow-sm z-10 space-x-1">
+              {/* Tab */}
+              <div className="flex items-center gap-2 h-full bg-[#1e1e1e] border-t-2 border-t-emerald-500 px-4 pt-0.5">
+                <FileCode2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-[11px] font-medium text-white">{entrypoint}</span>
               </div>
             </div>
-            <div className="relative flex-1 dark-scrollbar overflow-auto">
+
+            <div className="flex-1 w-full bg-[#1e1e1e]">
               <Editor
+                height="100%"
+                language="python"
+                theme="vs-dark"
                 value={code}
-                onValueChange={(code) => setCode(code)}
-                highlight={(code) => Prism.highlight(code, Prism.languages.python, "python")}
-                padding={20}
-                className="font-mono text-[13px] leading-relaxed text-slate-100 min-h-full"
-                style={{
-                  fontFamily: '"IBM Plex Mono", monospace'
+                onChange={(val) => setCode(val || "")}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  fontFamily: '"IBM Plex Mono", "Menlo", "Monaco", "Courier New", monospace',
+                  padding: { top: 16 },
+                  scrollBeyondLastLine: false,
+                  smoothScrolling: true,
+                  cursorBlinking: "smooth",
+                  cursorSmoothCaretAnimation: "on",
+                  formatOnPaste: true,
+                  lineHeight: 1.6
                 }}
               />
             </div>
           </div>
 
-          {/* Bottom Terminal Section */}
-          <div className="flex flex-1 flex-col overflow-hidden bg-[#090f16] shadow-ide rounded-xl border border-white/5">
-            <div className="flex h-9 items-center gap-1 border-b border-white/5 bg-white/[0.02] px-2">
-              <button
-                className={`px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === "output" ? "text-primary border-b-2 border-primary h-full" : "text-slate-500 hover:text-slate-300"
-                  }`}
-                onClick={() => setActiveTab("output")}
-              >
-                Output
-              </button>
-              <button
-                className={`px-3 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === "files" ? "text-primary border-b-2 border-primary h-full" : "text-slate-500 hover:text-slate-300"
-                  }`}
-                onClick={() => setActiveTab("files")}
-              >
-                Generated
-              </button>
+          {/* Terminal / Output Panel */}
+          <div className="flex flex-1 flex-col min-h-[250px] border-t border-white/10 bg-[#141414] z-20 shadow-[0_-10px_30px_rgba(0,0,0,0.1)]">
+            <div className="flex h-9 items-center justify-between border-b border-black/20 px-2 bg-[#181818]">
+              <div className="flex items-center h-full gap-1">
+                <button
+                  className={`px-4 text-[10px] font-bold uppercase tracking-wider transition-all h-full flex items-center ${activeTab === "output" ? "text-white border-b border-white" : "text-slate-500 hover:text-slate-300"}`}
+                  onClick={() => setActiveTab("output")}
+                >
+                  Terminal
+                </button>
+                <button
+                  className={`px-4 text-[10px] font-bold uppercase tracking-wider transition-all h-full flex items-center ${activeTab === "files" ? "text-white border-b border-white" : "text-slate-500 hover:text-slate-300"}`}
+                  onClick={() => setActiveTab("files")}
+                >
+                  Artifacts
+                </button>
+              </div>
+
+              {/* Mini Status */}
+              <div className="flex items-center gap-2 pr-2">
+                <div className="flex items-center gap-1.5 max-w-[400px]">
+                  <div className={`w-2 h-2 rounded-full ${errorMessage ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'}`} />
+                  <span className="text-[9px] text-slate-400 truncate uppercase tracking-widest">{errorMessage || statusMessage}</span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-auto p-6 font-mono text-xs dark-scrollbar">
+            <div className="flex-1 overflow-auto p-4 font-mono text-xs dark-scrollbar selection:bg-emerald-500/30">
               {activeTab === "output" && (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {result ? (
-                    <>
-                      <div className="flex items-center gap-4 pb-2 border-b border-white/5">
-                        <Badge variant="outline" className="border-emerald-500/50 text-emerald-400 bg-emerald-500/5">
-                          {result.status}
-                        </Badge>
-                        <span className="text-white/40">Duration: {result.duration_ms}ms</span>
-                        <span className="text-white/40">Exit Code: {result.exit_code}</span>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-4 text-[10px] pb-3 border-b border-white/5">
+                        <span className={`font-bold uppercase ${result.exit_code === 0 ? 'text-emerald-400' : 'text-red-400'}`}>Process {result.exit_code === 0 ? 'Exited (0)' : `Failed (${result.exit_code})`}</span>
+                        <span className="text-slate-500">{result.duration_ms}ms</span>
                       </div>
 
-                      <div className="space-y-4 mt-4">
-                        <div>
-                          <p className="mb-2 text-[10px] font-bold uppercase text-emerald-500/60">stdout</p>
-                          <pre className="text-emerald-200/90 whitespace-pre-wrap">{result.stdout || "(no output)"}</pre>
-                        </div>
-                        {result.stderr && (
-                          <div>
-                            <p className="mb-2 text-[10px] font-bold uppercase text-rose-500/60">stderr</p>
-                            <pre className="text-rose-300/90 whitespace-pre-wrap">{result.stderr}</pre>
-                          </div>
-                        )}
-                      </div>
-                    </>
+                      {result.stdout && (
+                        <div className="text-slate-300 whitespace-pre-wrap leading-relaxed">{result.stdout}</div>
+                      )}
+                      {result.stderr && (
+                        <div className="text-red-400/90 whitespace-pre-wrap leading-relaxed">{result.stderr}</div>
+                      )}
+                    </div>
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center text-slate-600 gap-2 opacity-50">
-                      <Play className="h-8 w-8" />
-                      <p>Execution results will appear here</p>
+                      <div className="flex h-full flex-col items-center justify-center text-slate-500/50 gap-3 pt-8">
+                        <Play className="h-6 w-6 opacity-30" />
+                        <span className="text-[10px] uppercase tracking-widest font-semibold opacity-70">Awaiting Execution</span>
                     </div>
                   )}
                 </div>
               )}
 
               {activeTab === "files" && (
-                <div className="space-y-4">
+                <div className="space-y-4 max-w-2xl">
                   {result?.downloads && result.downloads.length > 0 ? (
                     <div className="grid gap-2">
-                      <p className="mb-2 text-[10px] font-bold uppercase text-primary/60">Generated Artifacts</p>
                       {result.downloads.map((download) => (
-                        <div key={download.key} className="flex items-center justify-between rounded-lg bg-white/5 p-3 border border-white/5 hover:bg-white/10 transition-colors">
+                        <div key={download.key} className="flex items-center justify-between rounded bg-[#1e1e1e] p-2 hover:bg-[#252525] transition-colors border border-white/5">
                           <div className="flex items-center gap-3">
-                            <div className="rounded-md bg-primary/20 p-2">
-                              <FileCode2 className="h-4 w-4 text-primary" />
-                            </div>
-                            <span className="text-sm text-slate-200">{download.key}</span>
+                            <div className="p-1.5"><FileCode2 className="h-4 w-4 text-emerald-500" /></div>
+                            <span className="text-xs text-slate-300 font-medium">{download.key}</span>
                           </div>
                           <a href={download.url} target="_blank" rel="noreferrer">
-                            <Button variant="outline" size="sm" className="h-8 text-xs border-white/10 text-slate-300 hover:bg-white/5 hover:text-white">
+                            <Button variant="outline" size="sm" className="h-7 text-[10px] border-white/10 text-white bg-transparent hover:bg-white/10 rounded-sm">
                               Download
                             </Button>
                           </a>
@@ -461,9 +516,9 @@ export default function App() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center text-slate-600 gap-2 opacity-50">
-                      <UploadCloud className="h-8 w-8" />
-                      <p>Generated files will appear here after execution</p>
+                      <div className="flex h-full flex-col items-center justify-center text-slate-500/50 gap-3 pt-8">
+                        <UploadCloud className="h-6 w-6 opacity-30" />
+                        <span className="text-[10px] uppercase tracking-widest font-semibold opacity-70">No Results Found</span>
                     </div>
                   )}
                 </div>
@@ -472,20 +527,6 @@ export default function App() {
           </div>
         </main>
       </div>
-
-      <footer className="flex h-8 items-center justify-between border-t px-4 bg-card text-[10px] uppercase tracking-widest text-muted-foreground/60 shadow-inner">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 font-medium">
-            <FlaskConical className="h-3 w-3" />
-            Sandbox Executor v1.0
-          </span>
-          <div className="h-3 w-px bg-border" />
-          <span>Connected to MinIO Store</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span>Ready for transformation</span>
-        </div>
-      </footer>
     </div>
-  )
+  );
 }
