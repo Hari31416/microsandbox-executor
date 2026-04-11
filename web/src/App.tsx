@@ -157,6 +157,8 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState("Write Python or bash and run it in a fresh sandbox.");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"output" | "files">("output");
+  const [terminalInput, setTerminalInput] = useState("");
+  const [lastExecutedCommand, setLastExecutedCommand] = useState<string | null>(null);
 
   const readyToRun = code.trim().length > 0 && !running;
 
@@ -238,18 +240,23 @@ export default function App() {
     }
   }
 
-  async function handleRun() {
-    if (!readyToRun) {
+  async function handleRun(customCode?: string | React.MouseEvent, customEntrypoint?: string, forceBash?: boolean) {
+    const codeToRun = typeof customCode === "string" ? customCode : code;
+    if (!codeToRun.trim() || running) {
       return;
     }
 
     setRunning(true);
     setErrorMessage(null);
-    setStatusMessage("Launching a fresh sandbox and streaming your workspace into it...");
+    setStatusMessage(typeof customCode === "string" ? "Running terminal command..." : "Launching a fresh sandbox and streaming your workspace into it...");
     setActiveTab("output");
 
+    if (typeof customCode !== "string") {
+      setLastExecutedCommand(null); // Reset when running from editor
+    }
+
     try {
-      const isBash = executionMode === "bash";
+      const isBash = forceBash || executionMode === "bash";
       const executeEndpoint = isBash ? "/v1/execute/bash" : "/v1/execute";
 
       let currentSessionId = sessionId;
@@ -266,11 +273,11 @@ export default function App() {
 
       const requestBody = {
         session_id: currentSessionId,
-        entrypoint: entrypoint || (isBash ? "main.sh" : "main.py"),
+        entrypoint: customEntrypoint || entrypoint || (isBash ? "main.sh" : "main.py"),
         network_mode: "none",
         allowed_hosts: [],
         file_paths: filePaths.length > 0 ? filePaths : undefined,
-        ...(isBash ? { script: code } : { code, python_profile: pythonProfile })
+        ...(isBash ? { script: codeToRun } : { code: codeToRun, python_profile: pythonProfile })
       };
 
       const response = await fetch(apiUrl(executeEndpoint), {
@@ -315,6 +322,15 @@ export default function App() {
     setStatusMessage(`Copied ${text}`);
   }
 
+  async function handleTerminalSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!terminalInput.trim() || running) return;
+    const command = terminalInput;
+    setTerminalInput("");
+    setLastExecutedCommand(command);
+    await handleRun(command, "terminal.sh", true);
+  }
+
   function switchExecutionMode(mode: ExecutionMode) {
     setExecutionMode(mode);
     setResult(null);
@@ -348,7 +364,7 @@ export default function App() {
   }, [executionMode, uploadedFiles]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#1e1e1e] text-slate-300 font-sans">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#1e1e1e] text-slate-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-50">
       {/* Top Header */}
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-[#181818] px-6 shadow-sm z-10">
         <div className="flex items-center gap-4">
@@ -366,7 +382,7 @@ export default function App() {
           <Button
             size="sm"
             className="h-8 gap-2 bg-emerald-600 text-white hover:bg-emerald-500 transition-colors shadow-none rounded-sm px-4"
-            onClick={handleRun}
+            onClick={(e) => handleRun(e)}
             disabled={!readyToRun || running}
           >
             {running ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
@@ -542,31 +558,53 @@ export default function App() {
 
             <div className="flex-1 overflow-auto p-4 font-mono text-xs dark-scrollbar selection:bg-emerald-500/30">
               {activeTab === "output" && (
-                <div className="space-y-4">
-                  <div className="rounded border border-white/5 bg-[#111111] px-3 py-2 text-[11px] text-slate-400">
-                    <span className="mr-2 text-slate-500">$</span>
-                    {executionMode === "bash" ? `bash ${entrypoint}` : `python3 ${entrypoint}`}
-                  </div>
-                  {result ? (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-4 text-[10px] pb-3 border-b border-white/5">
-                        <span className={`font-bold uppercase ${result.exit_code === 0 ? 'text-emerald-400' : 'text-red-400'}`}>Process {result.exit_code === 0 ? 'Exited (0)' : `Failed (${result.exit_code})`}</span>
-                        <span className="text-slate-500">{result.duration_ms}ms</span>
-                      </div>
+                <div className="flex flex-col gap-4 h-full">
+                  <form
+                    onSubmit={handleTerminalSubmit}
+                    className="flex items-center rounded border border-white/5 bg-[#111111] px-3 py-2 text-[11px] text-slate-300 focus-within:border-emerald-500/50 transition-colors shrink-0"
+                  >
+                    <span className="mr-2 text-emerald-500 font-bold">❯</span>
+                    <input
+                      type="text"
+                      className="flex-1 bg-transparent outline-none border-none placeholder-slate-600 font-mono"
+                      placeholder="Execute a bash command..."
+                      value={terminalInput}
+                      onChange={(e) => setTerminalInput(e.target.value)}
+                      disabled={running}
+                      autoComplete="off"
+                      spellCheck="false"
+                    />
+                  </form>
 
-                      {result.stdout && (
-                        <div className="text-slate-300 whitespace-pre-wrap leading-relaxed">{result.stdout}</div>
-                      )}
-                      {result.stderr && (
-                        <div className="text-red-400/90 whitespace-pre-wrap leading-relaxed">{result.stderr}</div>
-                      )}
-                    </div>
-                  ) : (
-                      <div className="flex h-full flex-col items-center justify-center text-slate-500/50 gap-3 pt-8">
+                  <div className="flex-1 space-y-4">
+                    {result ? (
+                      <div className="font-mono text-[12px] leading-relaxed flex flex-col pt-1">
+                        <div className="text-slate-400 mb-3 flex gap-2 items-start opacity-80">
+                          <span className="text-emerald-500 font-bold select-none">$</span>
+                          <span className="break-all">{lastExecutedCommand ? lastExecutedCommand : (executionMode === "bash" ? `bash ${entrypoint}` : `python3 ${entrypoint}`)}</span>
+                        </div>
+
+                        {result.stdout && (
+                          <div className="text-slate-300 whitespace-pre-wrap break-all">{result.stdout}</div>
+                        )}
+                        {result.stderr && (
+                          <div className="text-red-400/90 whitespace-pre-wrap break-all">{result.stderr}</div>
+                        )}
+
+                        <div className="mt-4 flex items-center gap-2 text-[10px] text-slate-500 opacity-60 select-none pb-2 border-t border-white/5 pt-3">
+                           <span className={result.exit_code === 0 ? 'text-emerald-500/50' : 'text-red-500/50'} >
+                             ●
+                           </span>
+                           <span>Process {result.exit_code === 0 ? 'exited (0)' : `failed (${result.exit_code})`} in {result.duration_ms}ms</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-slate-500/50 gap-3 pt-8 pb-4">
                         <Play className="h-6 w-6 opacity-30" />
                         <span className="text-[10px] uppercase tracking-widest font-semibold opacity-70">Awaiting Execution</span>
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
