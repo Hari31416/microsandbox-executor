@@ -17,6 +17,19 @@ import type { RuntimeHealth, RuntimeJobInput, RuntimeJobResult, SandboxRuntime }
 
 class FakeRuntime implements SandboxRuntime {
   async executeJob(input: RuntimeJobInput): Promise<RuntimeJobResult> {
+    if (input.command === "bash") {
+      const scriptPath = join(input.workspaceHostPath, input.args[0] ?? "main.sh");
+      const scriptContents = await readFile(scriptPath, "utf8");
+      await writeFile(join(input.workspaceHostPath, "bash-output.txt"), `ran:${scriptContents}`, "utf8");
+
+      return {
+        exitCode: 0,
+        stdout: "bash ok\n",
+        stderr: "",
+        durationMs: 5
+      };
+    }
+
     const inputPath = join(input.workspaceHostPath, "input.txt");
     const outputPath = join(input.workspaceHostPath, "output.txt");
     const contents = await readFile(inputPath, "utf8");
@@ -140,6 +153,28 @@ test("session routes support upload, full-session execute, listing, download, an
   });
   assert.equal(download.statusCode, 200);
   assert.equal(download.body, "HELLO WORLD");
+
+  const bashExecute = await app.inject({
+    method: "POST",
+    url: "/v1/execute/bash",
+    headers: {
+      "content-type": "application/json"
+    },
+    payload: {
+      session_id: session.session_id,
+      script: "echo bash > bash-output.txt"
+    }
+  });
+  assert.equal(bashExecute.statusCode, 200);
+  const bashExecution = bashExecute.json() as { files_uploaded: string[] };
+  assert.deepEqual(bashExecution.files_uploaded.sort(), ["bash-output.txt", "main.sh"]);
+
+  const bashDownload = await app.inject({
+    method: "GET",
+    url: `/v1/sessions/${session.session_id}/files/bash-output.txt`
+  });
+  assert.equal(bashDownload.statusCode, 200);
+  assert.equal(bashDownload.body, "ran:echo bash > bash-output.txt");
 
   const remove = await app.inject({
     method: "DELETE",

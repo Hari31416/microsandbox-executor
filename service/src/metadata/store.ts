@@ -2,7 +2,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 
 import { ensureDir } from "../util/fs.js";
-import type { ExecuteRequest, JobRecord } from "../jobs/models.js";
+import type { ExecutionRequest, JobRecord } from "../jobs/models.js";
 
 export interface SessionRecord {
   sessionId: string;
@@ -241,7 +241,7 @@ export class MetadataStore {
     return row ? mapSessionFile(row) : null;
   }
 
-  createJob(jobId: string, request: ExecuteRequest) {
+  createJob(jobId: string, request: ExecutionRequest) {
     if (this.getJob(jobId)) {
       throw new Error(`Job already exists: ${jobId}`);
     }
@@ -497,7 +497,7 @@ function mapJob(row: Record<string, unknown>): JobRecord {
     createdAt: String(row.created_at),
     startedAt: row.started_at === null ? null : String(row.started_at),
     completedAt: row.completed_at === null ? null : String(row.completed_at),
-    request: JSON.parse(String(row.request_json)) as ExecuteRequest
+    request: JSON.parse(String(row.request_json)) as ExecutionRequest
   };
 }
 

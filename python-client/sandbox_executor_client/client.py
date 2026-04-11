@@ -5,7 +5,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any
 from urllib import error, parse, request
 
-from .models import ExecuteRequest, ExecutionResult, HealthResponse, JobResponse
+from .models import ExecuteBashRequest, ExecuteRequest, ExecutionResult, HealthResponse, JobResponse
 
 
 class SandboxExecutorError(RuntimeError):
@@ -35,6 +35,13 @@ class SandboxExecutorClient:
     ) -> ExecutionResult:
         payload = self._to_payload(request_data, kwargs)
         data = self._request("POST", "/v1/execute", payload)
+        return ExecutionResult.from_dict(data)
+
+    def execute_bash(
+        self, request_data: ExecuteBashRequest | dict[str, Any] | None = None, /, **kwargs: Any
+    ) -> ExecutionResult:
+        payload = self._to_payload(request_data, kwargs)
+        data = self._request("POST", "/v1/execute/bash", payload)
         return ExecutionResult.from_dict(data)
 
     def _request(

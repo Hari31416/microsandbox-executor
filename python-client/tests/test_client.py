@@ -1,6 +1,6 @@
 import unittest
 
-from sandbox_executor_client import ExecuteRequest, SandboxExecutorClient
+from sandbox_executor_client import ExecuteBashRequest, ExecuteRequest, SandboxExecutorClient
 
 
 class SandboxExecutorClientTests(unittest.TestCase):
@@ -28,6 +28,21 @@ class SandboxExecutorClientTests(unittest.TestCase):
     def test_client_default_base_url(self) -> None:
         client = SandboxExecutorClient()
         self.assertEqual(client.base_url, "http://127.0.0.1:3000")
+
+    def test_bash_request_payload_roundtrip(self) -> None:
+        request = ExecuteBashRequest(
+            session_id="sess_123",
+            script="echo hi",
+            file_paths=["script-input.txt"],
+            timeout_seconds=10,
+        )
+
+        payload = request.to_payload()
+
+        self.assertEqual(payload["session_id"], "sess_123")
+        self.assertEqual(payload["script"], "echo hi")
+        self.assertEqual(payload["file_paths"], ["script-input.txt"])
+        self.assertEqual(payload["timeout_seconds"], 10)
 
 
 if __name__ == "__main__":

@@ -53,6 +53,44 @@ class ExecuteRequest:
 
 
 @dataclass(slots=True)
+class ExecuteBashRequest:
+    session_id: str
+    script: str
+    file_paths: list[str] | None = None
+    job_id: str | None = None
+    entrypoint: str = "main.sh"
+    timeout_seconds: int | None = None
+    cpu_limit: int | None = None
+    memory_mb: int | None = None
+    network_mode: NetworkMode = "none"
+    allowed_hosts: list[str] = field(default_factory=list)
+    environment: dict[str, str] = field(default_factory=dict)
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "session_id": self.session_id,
+            "script": self.script,
+            "entrypoint": self.entrypoint,
+            "network_mode": self.network_mode,
+            "allowed_hosts": self.allowed_hosts,
+            "environment": self.environment,
+        }
+
+        if self.file_paths is not None:
+            payload["file_paths"] = self.file_paths
+        if self.job_id is not None:
+            payload["job_id"] = self.job_id
+        if self.timeout_seconds is not None:
+            payload["timeout_seconds"] = self.timeout_seconds
+        if self.cpu_limit is not None:
+            payload["cpu_limit"] = self.cpu_limit
+        if self.memory_mb is not None:
+            payload["memory_mb"] = self.memory_mb
+
+        return payload
+
+
+@dataclass(slots=True)
 class JobResponse:
     job_id: str
     session_id: str

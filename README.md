@@ -196,6 +196,30 @@ Response example:
 }
 ```
 
+### POST /v1/execute/bash
+
+Runs a raw bash script synchronously in a fresh sandbox and returns execution output.
+
+Request body example:
+
+```json
+{
+  "session_id": "sess_123",
+  "file_paths": ["input.txt"],
+  "job_id": "job_789",
+  "script": "cat input.txt > copied.txt\nprintf 'done\n'",
+  "entrypoint": "main.sh",
+  "timeout_seconds": 60,
+  "cpu_limit": 1,
+  "memory_mb": 2048,
+  "network_mode": "none",
+  "allowed_hosts": [],
+  "environment": {}
+}
+```
+
+If `file_paths` is omitted, the service stages all current files in the session.
+
 ### GET /v1/jobs/:jobId
 
 Returns the persisted job record for the given job ID.

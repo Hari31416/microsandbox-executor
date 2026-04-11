@@ -1,7 +1,8 @@
 from .client import SandboxExecutorClient, SandboxExecutorError
-from .models import ExecuteRequest, ExecutionResult, HealthResponse, JobResponse
+from .models import ExecuteBashRequest, ExecuteRequest, ExecutionResult, HealthResponse, JobResponse
 
 __all__ = [
+    "ExecuteBashRequest",
     "ExecuteRequest",
     "ExecutionResult",
     "HealthResponse",

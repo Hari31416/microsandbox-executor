@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { executeRequestSchema } from "../../src/jobs/models.js";
+import { executeBashRequestSchema, executeRequestSchema } from "../../src/jobs/models.js";
 
 test("executeRequestSchema accepts session-relative file paths", () => {
   const parsed = executeRequestSchema.parse({
@@ -42,4 +42,14 @@ test("executeRequestSchema accepts data-science python profile", () => {
   });
 
   assert.equal(parsed.pythonProfile, "data-science");
+});
+
+test("executeBashRequestSchema accepts shell scripts", () => {
+  const parsed = executeBashRequestSchema.parse({
+    session_id: "sess_123",
+    script: "echo hello > output.txt"
+  });
+
+  assert.equal(parsed.entrypoint, "main.sh");
+  assert.equal(parsed.kind, "bash");
 });

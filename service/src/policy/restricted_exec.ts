@@ -45,6 +45,24 @@ export async function preparePythonExecution(options: {
   };
 }
 
+export async function prepareBashExecution(options: {
+  workspacePath: string;
+  entrypoint: string;
+  script: string;
+}): Promise<PreparedExecution> {
+  const entrypoint = normalizeRelativePath(options.entrypoint);
+  const entrypointHostPath = resolveWithin(options.workspacePath, entrypoint);
+
+  await ensureDir(dirname(entrypointHostPath));
+  await writeFile(entrypointHostPath, options.script, "utf8");
+
+  return {
+    command: "bash",
+    args: [entrypoint],
+    ignoredRelativePrefixes: [INTERNAL_DIR]
+  };
+}
+
 function buildRunnerScript(entrypoint: string, blockedImports: string[]) {
   const blockedLiteral = JSON.stringify([...new Set(blockedImports)].sort());
   const entrypointLiteral = JSON.stringify(entrypoint);

@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config.js";
 import { stat } from "node:fs/promises";
-import { preparePythonExecution } from "../policy/restricted_exec.js";
+import { prepareBashExecution, preparePythonExecution } from "../policy/restricted_exec.js";
 import type { SandboxRuntime } from "../runtime/types.js";
 import { createJobWorkspace, cleanupJobWorkspace } from "../storage/workspace.js";
 import { MetadataStore } from "../metadata/store.js";
@@ -8,7 +8,7 @@ import { SessionLockManager } from "../sessions/locks.js";
 import { createSandboxName, createJobId } from "../util/ids.js";
 import { resolveWithin } from "../util/fs.js";
 import { captureManifest, diffManifests } from "./manifests.js";
-import type { ExecuteRequest, JobRecord } from "./models.js";
+import type { ExecuteBashRequest, ExecuteRequest, ExecutionRequest, JobRecord } from "./models.js";
 import { WorkspaceSync } from "../storage/sync.js";
 
 export class JobExecutor {
@@ -21,15 +21,76 @@ export class JobExecutor {
   ) {}
 
   async execute(request: ExecuteRequest) {
+    return this.executePreparedJob({
+      request,
+      runtimeImage: this.resolveRuntimeImage(request.pythonProfile),
+      label: request.pythonProfile,
+      prepareExecution: async (workspacePath) =>
+        preparePythonExecution({
+          workspacePath,
+          entrypoint: request.entrypoint,
+          code: request.code,
+          enableRestrictedExec: request.restrictedExec ?? this.config.enableRestrictedExec,
+          blockedImports: this.config.blockedImports
+        })
+    });
+  }
+
+  async executeBash(request: ExecuteBashRequest) {
+    return this.executePreparedJob({
+      request,
+      runtimeImage: this.config.runtimeImages.default,
+      label: "bash",
+      prepareExecution: async (workspacePath) =>
+        prepareBashExecution({
+          workspacePath,
+          entrypoint: request.entrypoint,
+          script: request.script
+        })
+    });
+  }
+
+  get(jobId: string): JobRecord | null {
+    return this.metadata.getJob(jobId);
+  }
+
+  private validateRequest(request: ExecutionRequest) {
+    if ((request.timeoutSeconds ?? this.config.defaultTimeoutSeconds) > this.config.maxTimeoutSeconds) {
+      throw new Error(`timeout_seconds exceeds max allowed value of ${this.config.maxTimeoutSeconds}`);
+    }
+
+    if ((request.cpuLimit ?? this.config.defaultCpuLimit) > this.config.maxCpuLimit) {
+      throw new Error(`cpu_limit exceeds max allowed value of ${this.config.maxCpuLimit}`);
+    }
+
+    if ((request.memoryMb ?? this.config.defaultMemoryMb) > this.config.maxMemoryMb) {
+      throw new Error(`memory_mb exceeds max allowed value of ${this.config.maxMemoryMb}`);
+    }
+  }
+
+  private resolveRuntimeImage(profile: ExecuteRequest["pythonProfile"]) {
+    return this.config.runtimeImages[profile ?? "default"] ?? this.config.runtimeImages.default;
+  }
+
+  private async executePreparedJob(options: {
+    request: ExecuteRequest | ExecuteBashRequest;
+    runtimeImage: string;
+    label: string;
+    prepareExecution: (workspacePath: string) => Promise<{
+      command: string;
+      args: string[];
+      ignoredRelativePrefixes: string[];
+    }>;
+  }) {
+    const { request, runtimeImage, label, prepareExecution } = options;
     const jobId = request.jobId ?? createJobId();
-    const runtimeImage = this.resolveRuntimeImage(request.pythonProfile);
     this.validateRequest(request);
 
     console.info("[executor] starting job", {
       timestamp: new Date().toISOString(),
       jobId,
       sessionId: request.sessionId,
-      pythonProfile: request.pythonProfile,
+      executionKind: label,
       image: runtimeImage,
       entrypoint: request.entrypoint,
       fileCount: request.filePaths?.length ?? 0
@@ -56,13 +117,7 @@ export class JobExecutor {
         await this.sync.stageFiles(request.sessionId, stagedPaths, workspace.workspacePath);
         const beforeManifest = await captureManifest(workspace.workspacePath);
 
-        const preparedExecution = await preparePythonExecution({
-          workspacePath: workspace.workspacePath,
-          entrypoint: request.entrypoint,
-          code: request.code,
-          enableRestrictedExec: request.restrictedExec ?? this.config.enableRestrictedExec,
-          blockedImports: this.config.blockedImports
-        });
+        const preparedExecution = await prepareExecution(workspace.workspacePath);
 
         console.info("[executor] launching runtime", {
           timestamp: new Date().toISOString(),
@@ -71,7 +126,8 @@ export class JobExecutor {
           image: runtimeImage,
           timeoutSeconds: request.timeoutSeconds ?? this.config.defaultTimeoutSeconds,
           cpuLimit: request.cpuLimit ?? this.config.defaultCpuLimit,
-          memoryMb: request.memoryMb ?? this.config.defaultMemoryMb
+          memoryMb: request.memoryMb ?? this.config.defaultMemoryMb,
+          command: preparedExecution.command
         });
         const runtimeResult = await this.runtime.executeJob({
           sandboxName: createSandboxName(jobId),
@@ -130,27 +186,5 @@ export class JobExecutor {
         await cleanupJobWorkspace(workspace.jobRoot);
       }
     });
-  }
-
-  get(jobId: string): JobRecord | null {
-    return this.metadata.getJob(jobId);
-  }
-
-  private validateRequest(request: ExecuteRequest) {
-    if ((request.timeoutSeconds ?? this.config.defaultTimeoutSeconds) > this.config.maxTimeoutSeconds) {
-      throw new Error(`timeout_seconds exceeds max allowed value of ${this.config.maxTimeoutSeconds}`);
-    }
-
-    if ((request.cpuLimit ?? this.config.defaultCpuLimit) > this.config.maxCpuLimit) {
-      throw new Error(`cpu_limit exceeds max allowed value of ${this.config.maxCpuLimit}`);
-    }
-
-    if ((request.memoryMb ?? this.config.defaultMemoryMb) > this.config.maxMemoryMb) {
-      throw new Error(`memory_mb exceeds max allowed value of ${this.config.maxMemoryMb}`);
-    }
-  }
-
-  private resolveRuntimeImage(profile: ExecuteRequest["pythonProfile"]) {
-    return this.config.runtimeImages[profile ?? "default"] ?? this.config.runtimeImages.default;
   }
 }
