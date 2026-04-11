@@ -27,6 +27,12 @@ export async function registerExecuteRoutes(app: FastifyInstance, services: AppS
         });
       }
 
+      if (error instanceof Error && error.message.startsWith("Unknown session:")) {
+        return reply.code(404).send({
+          error: error.message
+        });
+      }
+
       request.log.error({ err: error }, "execution request failed");
       return reply.code(500).send({
         error: error instanceof Error ? error.message : "Internal server error"

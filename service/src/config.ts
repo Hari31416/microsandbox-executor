@@ -29,6 +29,8 @@ const envSchema = z.object({
   MICROSANDBOX_IMAGE: z.string().min(1).default("python:3.12"),
   MICROSANDBOX_IMAGE_DATA_SCIENCE: z.string().min(1).default("hari31416/sandbox-data-science:py312-v1"),
   SCRATCH_ROOT: z.string().min(1).default("/tmp/agent-sandbox"),
+  SESSION_STORAGE_ROOT: z.string().min(1).default("/tmp/agent-sandbox/sessions"),
+  SQLITE_DB_PATH: z.string().min(1).default("/tmp/agent-sandbox/metadata.sqlite"),
   GUEST_WORKSPACE_PATH: z.string().min(1).default("/workspace"),
   DEFAULT_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(60),
   MAX_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(300),
@@ -36,15 +38,13 @@ const envSchema = z.object({
   MAX_CPU_LIMIT: z.coerce.number().int().positive().default(4),
   DEFAULT_MEMORY_MB: z.coerce.number().int().positive().default(2048),
   MAX_MEMORY_MB: z.coerce.number().int().positive().default(4096),
+  SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(24 * 60 * 60),
+  SESSION_CLEANUP_INTERVAL_SECONDS: z.coerce.number().int().positive().default(10 * 60),
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(20 * 1024 * 1024),
+  MAX_FILES_PER_UPLOAD: z.coerce.number().int().positive().default(10),
   ENABLE_RESTRICTED_EXEC: booleanEnv().default(false),
   RESTRICTED_EXEC_BLOCKED_IMPORTS: z.string().default("subprocess,socket,multiprocessing,resource,pty"),
-  HEALTHCHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
-  S3_ENDPOINT: z.string().url().optional(),
-  S3_REGION: z.string().min(1).default("us-east-1"),
-  S3_BUCKET: z.string().optional(),
-  S3_ACCESS_KEY_ID: z.string().optional(),
-  S3_SECRET_ACCESS_KEY: z.string().optional(),
-  S3_FORCE_PATH_STYLE: booleanEnv().optional()
+  HEALTHCHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000)
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;
@@ -84,10 +84,6 @@ function applyEnvFile(envFilePath: string, shellKeys: Set<string>, loadedPaths: 
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const parsed = envSchema.parse(env);
-  const s3Configured =
-    Boolean(parsed.S3_BUCKET) &&
-    Boolean(parsed.S3_ACCESS_KEY_ID) &&
-    Boolean(parsed.S3_SECRET_ACCESS_KEY);
 
   return {
     host: parsed.HOST,
@@ -98,6 +94,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       "data-science": parsed.MICROSANDBOX_IMAGE_DATA_SCIENCE
     },
     scratchRoot: parsed.SCRATCH_ROOT,
+    sessionStorageRoot: parsed.SESSION_STORAGE_ROOT,
+    sqliteDbPath: parsed.SQLITE_DB_PATH,
     guestWorkspacePath: parsed.GUEST_WORKSPACE_PATH,
     defaultTimeoutSeconds: parsed.DEFAULT_TIMEOUT_SECONDS,
     maxTimeoutSeconds: parsed.MAX_TIMEOUT_SECONDS,
@@ -105,19 +103,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     maxCpuLimit: parsed.MAX_CPU_LIMIT,
     defaultMemoryMb: parsed.DEFAULT_MEMORY_MB,
     maxMemoryMb: parsed.MAX_MEMORY_MB,
+    sessionTtlSeconds: parsed.SESSION_TTL_SECONDS,
+    sessionCleanupIntervalSeconds: parsed.SESSION_CLEANUP_INTERVAL_SECONDS,
+    maxUploadBytes: parsed.MAX_UPLOAD_BYTES,
+    maxFilesPerUpload: parsed.MAX_FILES_PER_UPLOAD,
     enableRestrictedExec: parsed.ENABLE_RESTRICTED_EXEC,
     blockedImports: parsed.RESTRICTED_EXEC_BLOCKED_IMPORTS.split(",")
       .map((value) => value.trim())
       .filter(Boolean),
-    healthcheckTimeoutMs: parsed.HEALTHCHECK_TIMEOUT_MS,
-    s3: {
-      configured: s3Configured,
-      endpoint: parsed.S3_ENDPOINT,
-      region: parsed.S3_REGION,
-      bucket: parsed.S3_BUCKET,
-      accessKeyId: parsed.S3_ACCESS_KEY_ID,
-      secretAccessKey: parsed.S3_SECRET_ACCESS_KEY,
-      forcePathStyle: parsed.S3_FORCE_PATH_STYLE ?? Boolean(parsed.S3_ENDPOINT)
-    }
+    healthcheckTimeoutMs: parsed.HEALTHCHECK_TIMEOUT_MS
   };
 }

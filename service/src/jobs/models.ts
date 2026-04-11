@@ -5,7 +5,7 @@ import { normalizeRelativePath } from "../util/fs.js";
 export const executeRequestSchema = z
   .object({
     session_id: z.string().min(1),
-    file_paths: z.array(z.string().min(1)).min(1),
+    file_paths: z.array(z.string().min(1)).optional(),
     job_id: z.string().min(1).optional(),
     code: z.string(),
     entrypoint: z.string().min(1).default("main.py"),
@@ -27,7 +27,7 @@ export const executeRequestSchema = z
       });
     }
 
-    value.file_paths.forEach((filePath, index) => {
+    value.file_paths?.forEach((filePath, index) => {
       try {
         normalizeRelativePath(filePath);
       } catch (error) {

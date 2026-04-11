@@ -12,8 +12,8 @@ PythonProfile = Literal["default", "data-science"]
 @dataclass(slots=True)
 class ExecuteRequest:
     session_id: str
-    file_paths: list[str]
     code: str
+    file_paths: list[str] | None = None
     job_id: str | None = None
     entrypoint: str = "main.py"
     python_profile: PythonProfile = "default"
@@ -28,7 +28,6 @@ class ExecuteRequest:
     def to_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "session_id": self.session_id,
-            "file_paths": self.file_paths,
             "code": self.code,
             "entrypoint": self.entrypoint,
             "python_profile": self.python_profile,
@@ -37,6 +36,8 @@ class ExecuteRequest:
             "environment": self.environment,
         }
 
+        if self.file_paths is not None:
+            payload["file_paths"] = self.file_paths
         if self.job_id is not None:
             payload["job_id"] = self.job_id
         if self.timeout_seconds is not None:
@@ -109,6 +110,7 @@ class HealthResponse:
     status: str
     runtime: HealthComponent
     storage: HealthComponent
+    metadata: HealthComponent | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "HealthResponse":
@@ -116,4 +118,9 @@ class HealthResponse:
             status=data["status"],
             runtime=HealthComponent.from_dict(data["runtime"]),
             storage=HealthComponent.from_dict(data["storage"]),
+            metadata=(
+                HealthComponent.from_dict(data["metadata"])
+                if "metadata" in data
+                else None
+            ),
         )

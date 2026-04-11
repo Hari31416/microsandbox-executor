@@ -62,7 +62,7 @@ function generateSnippetForFiles(files: UploadedFile[]): { code: string; entrypo
 import os
 
 input_path = "${csvFile.name}"
-output_path = "./transformed_data.csv"
+output_path = "transformed_data.csv"
 
 # Read the CSV with Pandas
 df = pd.read_csv(input_path)
@@ -72,10 +72,8 @@ df.columns = [col.lower() for col in df.columns]
 # Add a new column
 df['processed'] = True
 
-# Ensure output directory exists (though sandbox handles this)
-os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-# Save result back to object store
+# Save result back to the session workspace
 df.to_csv(output_path, index=False)
 
 print(f"Data transformed and saved to {output_path}")
@@ -93,7 +91,7 @@ print(df.head())
       code: `import os
 
 input_path = "${txtFile.name}"
-output_path = "./processed.txt"
+output_path = "processed.txt"
 
 with open(input_path, 'r', encoding='utf-8') as f:
     text = f.read()
@@ -101,8 +99,6 @@ with open(input_path, 'r', encoding='utf-8') as f:
 # Example transformation: Uppercase the text and count characters
 processed_text = text.upper()
 char_count = len(processed_text)
-
-os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
 with open(output_path, 'w', encoding='utf-8') as f:
     f.write(processed_text)
@@ -120,12 +116,10 @@ print(f"Output saved to {output_path}")
   return {
     code: `import os
 
-input_dir = "./"
-output_path = "./available_files.txt"
+input_dir = "."
+output_path = "available_files.txt"
 
 files = os.listdir(input_dir) if os.path.exists(input_dir) else []
-
-os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
 with open(output_path, 'w', encoding='utf-8') as f:
     f.write("Available files:\\n")
@@ -178,7 +172,7 @@ export default function App() {
 
     setUploading(true);
     setErrorMessage(null);
-    setStatusMessage("Uploading files into the object store and preparing a session...");
+    setStatusMessage("Uploading files into local session storage and preparing a session...");
 
     try {
       const formData = new FormData();
@@ -257,7 +251,7 @@ export default function App() {
       setResult(execution);
       setStatusMessage(
         execution.exit_code === 0
-          ? "Execution completed. Any new or changed files were pushed back to object storage."
+          ? "Execution completed. Any new or changed files were saved back to the session."
           : "Execution finished with errors. Review stderr and adjust the code."
       );
     } catch (error) {
@@ -279,14 +273,9 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 hover:rotate-12 transition-transform text-emerald-500" />
-            <h1 className="text-sm font-semibold tracking-wide text-white">FIELD LAB</h1>
+            <h1 className="text-sm font-semibold tracking-wide text-white">Sandbox Demo</h1>
           </div>
           <div className="h-6 w-px bg-white/10" />
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <span className="font-mono text-[10px] uppercase tracking-wider">
-              {sessionId || "NO ACTIVE SESSION"}
-            </span>
-          </div>
         </div>
 
         <div className="flex items-center gap-4">

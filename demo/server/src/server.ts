@@ -7,11 +7,10 @@ import { z } from "zod";
 
 import { loadConfig, loadEnvFile } from "./config.js";
 import { ExecutorClient } from "./executor-client.js";
-import { DemoStorage } from "./storage.js";
 
 const executeRequestSchema = z.object({
   sessionId: z.string().min(1),
-  filePaths: z.array(z.string().min(1)).min(1),
+  filePaths: z.array(z.string().min(1)).optional(),
   entrypoint: z.string().min(1),
   pythonProfile: z.enum(["default", "data-science"]).default("default"),
   code: z.string().min(1)
@@ -26,7 +25,6 @@ async function main() {
     }
   });
 
-  const storage = new DemoStorage(config.s3);
   const executor = new ExecutorClient(config.executorBaseUrl);
 
   await app.register(multipart, {
@@ -37,14 +35,13 @@ async function main() {
   });
 
   app.get("/api/health", async () => {
-    const [storageHealth, executorHealth] = await Promise.all([
-      storage.healthCheck().then(() => ({ ok: true })).catch((error) => ({ ok: false, error: formatError(error) })),
-      executor.health().then((value) => ({ ok: true, value })).catch((error) => ({ ok: false, error: formatError(error) }))
-    ]);
+    const executorHealth = await executor
+      .health()
+      .then((value) => ({ ok: true, value }))
+      .catch((error) => ({ ok: false, error: formatError(error) }));
 
     return {
-      status: storageHealth.ok && executorHealth.ok ? "ok" : "degraded",
-      storage: storageHealth,
+      status: executorHealth.ok ? "ok" : "degraded",
       executor: executorHealth
     };
   });
@@ -52,7 +49,7 @@ async function main() {
   app.post("/api/uploads", async (request, reply) => {
     const parts = request.parts();
     let sessionId: string | undefined;
-    const uploads: Array<{ name: string; key: string; size: number; contentType: string | undefined }> = [];
+    const uploads: Array<{ name: string; buffer: Buffer; contentType?: string }> = [];
 
     for await (const part of parts) {
       if (part.type === "field") {
@@ -63,42 +60,41 @@ async function main() {
         continue;
       }
 
-      sessionId ??= `demo-${randomUUID()}`;
-      const filename = sanitizeFilename(part.filename ?? "upload.bin");
-      const key = `${config.demoPrefix}/${sessionId}/inputs/${filename}`;
-      const buffer = await part.toBuffer();
-
-      await storage.uploadObject(key, buffer, part.mimetype);
       uploads.push({
-        name: filename,
-        key,
-        size: buffer.byteLength,
+        name: sanitizeFilename(part.filename ?? "upload.bin"),
+        buffer: await part.toBuffer(),
         contentType: part.mimetype
       });
     }
 
-    if (!sessionId || uploads.length === 0) {
+    if (uploads.length === 0) {
       return reply.code(400).send({
         error: "At least one file is required"
       });
     }
 
-    const sessionRoot = `${config.demoPrefix}/${sessionId}`;
-    const suggestedEntrypoint = "main.py";
-    const csvFile = uploads.find((file) => file.name.toLowerCase().endsWith(".csv"));
-    const suggestedOutputPath = csvFile ? `${filenameStem(csvFile.name)}_cleaned.csv` : `result${pickDefaultExtension(uploads[0]?.name ?? "")}`;
+    const session = sessionId ? { session_id: sessionId } : await executor.createSession(`demo-${randomUUID()}`);
+    const uploadResult = await executor.uploadFiles(session.session_id, uploads);
+    const listedFiles = await executor.listFiles(session.session_id);
+    const csvFile = listedFiles.files.find((file) => file.path.toLowerCase().endsWith(".csv"));
+    const suggestedOutputPath = csvFile
+      ? `${filenameStem(csvFile.path)}_cleaned.csv`
+      : `result${pickDefaultExtension(listedFiles.files[0]?.path ?? "")}`;
 
     return {
-      sessionId,
-      sessionRoot,
-      suggestedEntrypoint,
-      filePaths: uploads.map((file) => file.key),
-      files: uploads.map((file) => ({
-        ...file,
-        workspacePath: file.name
+      sessionId: session.session_id,
+      sessionRoot: session.session_id,
+      suggestedEntrypoint: "main.py",
+      filePaths: uploadResult.file_paths,
+      files: listedFiles.files.map((file) => ({
+        name: basenameFromKey(file.path),
+        key: file.path,
+        workspacePath: file.path,
+        size: file.size,
+        contentType: file.content_type ?? undefined
       })),
       suggestedOutputPath,
-      suggestedCode: buildSuggestedCode(uploads.map((file) => file.name), suggestedOutputPath)
+      suggestedCode: buildSuggestedCode(listedFiles.files.map((file) => file.path), suggestedOutputPath)
     };
   });
 
@@ -114,24 +110,26 @@ async function main() {
 
     return reply.send({
       ...result,
-      downloads: result.files_uploaded.map((key) => ({
-        key,
-        url: `/api/files?key=${encodeURIComponent(key)}`
+      downloads: result.files_uploaded.map((path) => ({
+        key: path,
+        url: `/api/files?sessionId=${encodeURIComponent(payload.sessionId)}&path=${encodeURIComponent(path)}`
       }))
     });
   });
 
   app.get("/api/files", async (request, reply) => {
-    const query = request.query as { key?: string };
+    const query = request.query as { sessionId?: string; path?: string };
 
-    if (!query.key) {
-      return reply.code(400).send({ error: "key is required" });
+    if (!query.sessionId || !query.path) {
+      return reply.code(400).send({ error: "sessionId and path are required" });
     }
 
-    const file = await storage.downloadObject(query.key);
+    const file = await executor.downloadFile(query.sessionId, query.path);
 
     reply.header("content-type", file.contentType);
-    reply.header("content-disposition", `inline; filename="${basenameFromKey(query.key)}"`);
+    if (file.contentDisposition) {
+      reply.header("content-disposition", file.contentDisposition);
+    }
     return reply.send(file.body);
   });
 

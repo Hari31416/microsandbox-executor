@@ -1,21 +1,21 @@
-import { lstat, symlink } from "node:fs/promises";
+import { symlink } from "node:fs/promises";
 import { posix } from "node:path";
 
-import { normalizeRelativePath, resolveWithin } from "../util/fs.js";
-import type { SessionStorage } from "./types.js";
+import { normalizeRelativePath, pathExists, resolveWithin } from "../util/fs.js";
+import { LocalSessionStorage } from "./local.js";
 
 export class WorkspaceSync {
-  constructor(private readonly storage: SessionStorage) {}
+  constructor(private readonly storage: LocalSessionStorage) {}
 
-  async stageFiles(filePaths: string[], workspacePath: string) {
-    const downloadedFiles = await this.storage.downloadFiles(filePaths, workspacePath);
-    await createWorkspaceAliases(downloadedFiles, workspacePath);
-    return downloadedFiles;
+  async stageFiles(sessionId: string, filePaths: string[], workspacePath: string) {
+    const stagedFiles = await this.storage.stageFiles(sessionId, filePaths, workspacePath);
+    await createWorkspaceAliases(stagedFiles, workspacePath);
+    return stagedFiles;
   }
 
-  async persistFiles(workspacePath: string, sessionId: string, stagedFilePaths: string[], relativePaths: string[]) {
-    const uploads = buildUploadSpecs(sessionId, stagedFilePaths, relativePaths);
-    return this.storage.uploadFiles(workspacePath, uploads);
+  async persistFiles(workspacePath: string, sessionId: string, relativePaths: string[]) {
+    const persistedFiles = [...new Set(relativePaths.map((relativePath) => normalizeRelativePath(relativePath)))].sort();
+    return this.storage.persistFiles(sessionId, workspacePath, persistedFiles);
   }
 }
 
@@ -43,49 +43,4 @@ async function createWorkspaceAliases(filePaths: string[], workspacePath: string
 
     await symlink(filePath, aliasPath);
   }
-}
-
-async function pathExists(path: string) {
-  try {
-    await lstat(path);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return false;
-    }
-
-    throw error;
-  }
-}
-
-function buildUploadSpecs(sessionId: string, stagedFilePaths: string[], relativePaths: string[]) {
-  const normalizedExistingPaths = new Set(stagedFilePaths.map((filePath) => normalizeRelativePath(filePath)));
-  const outputPrefix = inferOutputPrefix(sessionId, stagedFilePaths);
-
-  return relativePaths.map((relativePath) => {
-    const normalizedPath = normalizeRelativePath(relativePath);
-
-    return {
-      localPath: normalizedPath,
-      objectKey: normalizedExistingPaths.has(normalizedPath) ? normalizedPath : posix.join(outputPrefix, normalizedPath)
-    };
-  });
-}
-
-function inferOutputPrefix(sessionId: string, stagedFilePaths: string[]) {
-  for (const filePath of stagedFilePaths) {
-    const normalizedPath = normalizeRelativePath(filePath);
-    const sessionMarker = `/${sessionId}/`;
-    const markerIndex = normalizedPath.indexOf(sessionMarker);
-
-    if (markerIndex >= 0) {
-      return posix.join(normalizedPath.slice(0, markerIndex + sessionMarker.length - 1), "outputs");
-    }
-
-    if (normalizedPath.endsWith(`/${sessionId}`)) {
-      return posix.join(normalizedPath, "outputs");
-    }
-  }
-
-  return posix.join(sessionId, "outputs");
 }

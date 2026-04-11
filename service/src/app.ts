@@ -2,10 +2,13 @@ import Fastify from "fastify";
 
 import type { AppConfig } from "./config.js";
 import { JobExecutor } from "./jobs/executor.js";
-import { InMemoryJobStore } from "./jobs/queue.js";
+import { MetadataStore } from "./metadata/store.js";
 import type { SandboxRuntime } from "./runtime/types.js";
+import { registerSessionRoutes } from "./routes/sessions.js";
+import { SessionCleanupService } from "./sessions/cleanup.js";
+import { SessionLockManager } from "./sessions/locks.js";
 import { WorkspaceSync } from "./storage/sync.js";
-import type { SessionStorage } from "./storage/types.js";
+import { LocalSessionStorage } from "./storage/local.js";
 import { registerExecuteRoutes } from "./routes/execute.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerJobRoutes } from "./routes/jobs.js";
@@ -14,9 +17,11 @@ import { createLoggerOptions } from "./util/logging.js";
 export interface AppServices {
   config: AppConfig;
   runtime: SandboxRuntime;
-  storage: SessionStorage;
+  storage: LocalSessionStorage;
+  metadata: MetadataStore;
+  locks: SessionLockManager;
+  cleanup: SessionCleanupService;
   sync: WorkspaceSync;
-  jobStore: InMemoryJobStore;
   executor: JobExecutor;
 }
 
@@ -26,8 +31,13 @@ export async function buildApp(services: AppServices) {
   });
 
   await registerHealthRoutes(app, services);
+  await registerSessionRoutes(app, services);
   await registerExecuteRoutes(app, services);
   await registerJobRoutes(app, services);
+  app.addHook("onClose", async () => {
+    services.cleanup.stop();
+    services.metadata.close();
+  });
 
   return app;
 }

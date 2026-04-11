@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { executeRequestSchema } from "../../src/jobs/models.js";
 
-test("executeRequestSchema accepts bucket-relative file paths", () => {
+test("executeRequestSchema accepts session-relative file paths", () => {
   const parsed = executeRequestSchema.parse({
     session_id: "sess_123",
     file_paths: ["inputs/example.txt", "nested/data.csv"],
@@ -12,6 +12,15 @@ test("executeRequestSchema accepts bucket-relative file paths", () => {
 
   assert.deepEqual(parsed.filePaths, ["inputs/example.txt", "nested/data.csv"]);
   assert.equal(parsed.pythonProfile, "default");
+});
+
+test("executeRequestSchema allows omitting file paths to stage the whole session", () => {
+  const parsed = executeRequestSchema.parse({
+    session_id: "sess_123",
+    code: "print('hello')"
+  });
+
+  assert.equal(parsed.filePaths, undefined);
 });
 
 test("executeRequestSchema rejects unsafe file paths", () => {

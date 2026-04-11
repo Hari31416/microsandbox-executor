@@ -2,18 +2,15 @@
 
 This demo shows the full flow:
 
-1. upload files to MinIO/S3-compatible storage
-2. send their bucket-relative keys to the sandbox executor service
-3. run Python against those staged files
-4. download transformed outputs
+1. upload files to the executor-backed local session storage
+2. run Python against those session files
+3. download transformed outputs from the executor service
 
 ## Ports
 
 - Demo frontend: `5173`
 - Demo API: `8787`
 - Sandbox service: `3000`
-- MinIO API: `9000`
-- MinIO console: `9001`
 
 ## Quick start
 

@@ -4,7 +4,7 @@ demo-build:
   env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml build demo-api demo-web
 
 demo-up:
-  env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml up -d minio minio-setup demo-api demo-web
+  env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml up -d demo-api demo-web
 
 demo-down:
   env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml down

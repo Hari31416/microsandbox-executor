@@ -1,5 +1,5 @@
 import { createWriteStream } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { access, copyFile, mkdir, rm, stat } from "node:fs/promises";
 import { dirname, normalize, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 
@@ -9,6 +9,15 @@ export async function ensureDir(path: string) {
 
 export async function removeDirIfExists(path: string) {
   await rm(path, { recursive: true, force: true });
+}
+
+export async function pathExists(path: string) {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function normalizeRelativePath(value: string) {
@@ -36,4 +45,16 @@ export function resolveWithin(root: string, relativePath: string) {
 export async function writeStreamToFile(stream: NodeJS.ReadableStream, destinationPath: string) {
   await ensureDir(dirname(destinationPath));
   await pipeline(stream, createWriteStream(destinationPath));
+}
+
+export async function copyRelativeFile(sourceRoot: string, destinationRoot: string, relativePath: string) {
+  const sourcePath = resolveWithin(sourceRoot, relativePath);
+  const destinationPath = resolveWithin(destinationRoot, relativePath);
+
+  await ensureDir(dirname(destinationPath));
+  await copyFile(sourcePath, destinationPath);
+}
+
+export async function statWithin(root: string, relativePath: string) {
+  return stat(resolveWithin(root, relativePath));
 }

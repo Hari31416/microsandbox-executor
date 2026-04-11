@@ -25,14 +25,7 @@ const booleanEnv = () =>
 const envSchema = z.object({
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().positive().default(8787),
-  EXECUTOR_BASE_URL: z.string().url().default("http://127.0.0.1:3000"),
-  S3_ENDPOINT: z.string().url(),
-  S3_REGION: z.string().min(1).default("us-east-1"),
-  S3_BUCKET: z.string().min(1),
-  S3_ACCESS_KEY_ID: z.string().min(1),
-  S3_SECRET_ACCESS_KEY: z.string().min(1),
-  S3_FORCE_PATH_STYLE: booleanEnv().default(true),
-  DEMO_PREFIX: z.string().min(1).default("demo")
+  EXECUTOR_BASE_URL: z.string().url().default("http://127.0.0.1:3000")
 });
 
 const SERVER_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -76,15 +69,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     host: parsed.HOST,
     port: parsed.PORT,
-    executorBaseUrl: parsed.EXECUTOR_BASE_URL,
-    s3: {
-      endpoint: parsed.S3_ENDPOINT,
-      region: parsed.S3_REGION,
-      bucket: parsed.S3_BUCKET,
-      accessKeyId: parsed.S3_ACCESS_KEY_ID,
-      secretAccessKey: parsed.S3_SECRET_ACCESS_KEY,
-      forcePathStyle: parsed.S3_FORCE_PATH_STYLE
-    },
-    demoPrefix: parsed.DEMO_PREFIX.replace(/^\/+|\/+$/g, "")
+    executorBaseUrl: parsed.EXECUTOR_BASE_URL
   };
 }

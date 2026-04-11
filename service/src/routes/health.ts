@@ -8,11 +8,13 @@ export async function registerHealthRoutes(app: FastifyInstance, services: AppSe
       services.runtime.healthCheck(),
       services.storage.healthCheck()
     ]);
+    const metadata = services.metadata.healthCheck();
 
     return {
-      status: runtime.ok && storage.ok ? "ok" : "degraded",
+      status: runtime.ok && storage.ok && metadata.ok ? "ok" : "degraded",
       runtime,
-      storage
+      storage,
+      metadata
     };
   });
 }
