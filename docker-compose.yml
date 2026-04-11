@@ -1,0 +1,13 @@
+services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /v1
+    environment:
+      - EXECUTOR_BASE_URL=${EXECUTOR_BASE_URL:-http://host.docker.internal:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${WEB_PORT:-5173}:80"

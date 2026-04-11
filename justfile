@@ -1,16 +1,38 @@
 set shell := ["zsh", "-cu"]
 
-demo-build:
-  env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml build demo-api demo-web
+web-build:
+  cd web && bun install && bun run build
 
-demo-up:
-  env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml up -d demo-api demo-web
+web-up:
+  mkdir -p .run
+  if [[ -f .run/web.pid ]] && kill -0 "$$(cat .run/web.pid)" 2>/dev/null; then \
+    echo "Web UI is already running (pid $$(cat .run/web.pid))"; \
+  else \
+    (cd web && bun install > /dev/null && nohup bun run dev > ../.run/web.log 2>&1 & echo $$! > ../.run/web.pid); \
+    echo "Started web UI (pid $$(cat .run/web.pid))"; \
+    echo "Logs: .run/web.log"; \
+  fi
 
-demo-down:
-  env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml down
+web-down:
+  if [[ -f .run/web.pid ]]; then \
+    pid="$$(cat .run/web.pid)"; \
+    if kill -0 "$$pid" 2>/dev/null; then \
+      kill "$$pid"; \
+      echo "Stopped web UI (pid $$pid)"; \
+    else \
+      echo "Web UI is not running"; \
+    fi; \
+    rm -f .run/web.pid; \
+  else \
+    echo "Web UI is not running"; \
+  fi
 
-demo-logs:
-  env_file=demo/.env.docker; if [[ ! -f "$env_file" ]]; then env_file=demo/.env.docker.example; fi; docker compose --env-file "$env_file" -f demo/docker-compose.yml logs -f demo-api demo-web
+web-logs:
+  if [[ -f .run/web.log ]]; then \
+    tail -f .run/web.log; \
+  else \
+    echo "No web log file found at .run/web.log"; \
+  fi
 
 sandbox-build:
   cd service && bun run build

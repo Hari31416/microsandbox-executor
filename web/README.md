@@ -9,7 +9,6 @@ This demo shows the full flow:
 ## Ports
 
 - Demo frontend: `5173`
-- Demo API: `8787`
 - Sandbox service: `3000`
 
 ## Quick start
@@ -26,8 +25,7 @@ This demo shows the full flow:
 
 - The sandbox service runs on the host and loads the shared repo-root `.env`.
 - The demo containers use `demo/.env.docker` when present, otherwise `demo/.env.docker.example`.
-- The demo API reaches the host-run sandbox service at `http://host.docker.internal:3000`.
+- The frontend proxy reaches the host-run sandbox service at `http://host.docker.internal:3000` or `127.0.0.1:3000`.
 - Default ports are still code-driven:
   - sandbox service: `3000`
-  - demo API: `8787`
   - demo frontend: `5173`

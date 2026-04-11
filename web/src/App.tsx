@@ -15,16 +15,6 @@ interface UploadedFile {
   contentType?: string;
 }
 
-interface UploadResponse {
-  sessionId: string;
-  sessionRoot: string;
-  suggestedEntrypoint: string;
-  filePaths: string[];
-  files: UploadedFile[];
-  suggestedOutputPath: string;
-  suggestedCode: string;
-}
-
 interface ExecutionResult {
   job_id: string;
   session_id: string;
@@ -39,7 +29,7 @@ interface ExecutionResult {
 
 type ExecutionMode = "python" | "bash";
 
-const apiBaseUrl = (import.meta.env.VITE_DEMO_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
 const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -190,33 +180,49 @@ export default function App() {
     setStatusMessage("Uploading files into local session storage and preparing a session...");
 
     try {
-      const formData = new FormData();
+      let currentSessionId = sessionId;
 
-      if (sessionId) {
-        formData.append("sessionId", sessionId);
+      if (!currentSessionId) {
+        const sessionRes = await fetch(apiUrl("/v1/sessions"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const sessionPayload = await sessionRes.json();
+        if (!sessionRes.ok) throw new Error(sessionPayload?.error || "Session creation failed");
+        currentSessionId = sessionPayload.session_id;
       }
 
+      const formData = new FormData();
       selectedFiles.forEach((file) => {
-        formData.append("files", file);
+        formData.append("files", file, file.name);
       });
 
-      const response = await fetch(apiUrl("/api/uploads"), {
+      const uploadRes = await fetch(apiUrl(`/v1/sessions/${encodeURIComponent(currentSessionId)}/files`), {
         method: "POST",
         body: formData
       });
-      const payload = (await response.json()) as UploadResponse | { error?: string };
+      const uploadPayload = await uploadRes.json();
+      if (!uploadRes.ok) throw new Error(uploadPayload?.error || "Upload failed");
 
-      if (!response.ok) {
-        throw new Error(typeof payload === "object" && payload && "error" in payload ? payload.error : "Upload failed");
-      }
+      const listRes = await fetch(apiUrl(`/v1/sessions/${encodeURIComponent(currentSessionId)}/files`));
+      const listPayload = await listRes.json();
+      if (!listRes.ok) throw new Error(listPayload?.error || "Failed to list files");
 
-      const upload = payload as UploadResponse;
-      setSessionId(upload.sessionId);
-      setFilePaths(upload.filePaths);
-      setUploadedFiles(upload.files);
+      const parsedFiles = (listPayload.files || []).map((file: any) => ({
+        name: file.path.split('/').pop() || "download.bin",
+        key: file.path,
+        workspacePath: file.path,
+        size: file.size,
+        contentType: file.content_type
+      }));
 
-      // Override the backend suggestions with our specialized frontend generation
-      const snippet = generatePythonSnippetForFiles(upload.files);
+      setSessionId(currentSessionId);
+      setFilePaths(uploadPayload.file_paths || []);
+      setUploadedFiles(parsedFiles);
+
+      // Generating snippet based on frontend logic
+      const snippet = generatePythonSnippetForFiles(parsedFiles);
       setExecutionMode("python");
       setEntrypoint(snippet.entrypoint);
       setSuggestedOutputPath(snippet.outputPath);
@@ -224,7 +230,7 @@ export default function App() {
       setPythonProfile(snippet.profile);
 
       setResult(null);
-      setStatusMessage(`Session ${upload.sessionId} is ready. Automatically applied ${snippet.profile} Python profile.`);
+      setStatusMessage(`Session ${currentSessionId} is ready. Automatically applied ${snippet.profile} Python profile.`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -243,28 +249,53 @@ export default function App() {
     setActiveTab("output");
 
     try {
-      const response = await fetch(apiUrl("/api/execute"), {
+      const isBash = executionMode === "bash";
+      const executeEndpoint = isBash ? "/v1/execute/bash" : "/v1/execute";
+
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const sessionRes = await fetch(apiUrl("/v1/sessions"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const sessionPayload = await sessionRes.json();
+        if (!sessionRes.ok) throw new Error(sessionPayload?.error || "Failed to create session");
+        currentSessionId = sessionPayload.session_id;
+      }
+
+      const requestBody = {
+        session_id: currentSessionId,
+        entrypoint: entrypoint || (isBash ? "main.sh" : "main.py"),
+        network_mode: "none",
+        allowed_hosts: [],
+        file_paths: filePaths.length > 0 ? filePaths : undefined,
+        ...(isBash ? { script: code } : { code, python_profile: pythonProfile })
+      };
+
+      const response = await fetch(apiUrl(executeEndpoint), {
         method: "POST",
         headers: {
           "content-type": "application/json"
         },
-        body: JSON.stringify({
-          sessionId: sessionId || undefined,
-          filePaths: filePaths.length > 0 ? filePaths : undefined,
-          entrypoint,
-          pythonProfile,
-          executionMode,
-          code
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      const payload = (await response.json()) as ExecutionResult | { error?: string };
+      const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(typeof payload === "object" && payload && "error" in payload ? payload.error : "Execution failed");
+        throw new Error(payload?.error || "Execution failed");
       }
 
-      const execution = payload as ExecutionResult;
+      const execution = {
+        ...payload,
+        session_id: currentSessionId,
+        downloads: (payload.files_uploaded || []).map((path: string) => ({
+          key: path,
+          url: apiUrl(`/v1/sessions/${encodeURIComponent(currentSessionId)}/files/${path.split('/').map(encodeURIComponent).join('/')}`)
+        }))
+      } as ExecutionResult;
+
       setSessionId(execution.session_id);
       setResult(execution);
       setStatusMessage(
@@ -323,7 +354,7 @@ export default function App() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <FlaskConical className="h-5 w-5 hover:rotate-12 transition-transform text-emerald-500" />
-            <h1 className="text-sm font-semibold tracking-wide text-white">Sandbox Demo</h1>
+            <h1 className="text-sm font-semibold tracking-wide text-white">Sandbox Manager</h1>
           </div>
           <div className="h-6 w-px bg-white/10" />
           <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-slate-500">
