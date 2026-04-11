@@ -209,6 +209,14 @@ Returns runtime, storage, and metadata health:
 - local storage probe details
 - SQLite metadata probe details
 
+### GET /docs
+
+Serves interactive Swagger UI for the sandbox server.
+
+### GET /docs/json
+
+Returns the generated OpenAPI document used by the Swagger UI.
+
 ## Configuration
 
 The service loads config from the repo root `.env` by default, with `ENV_FILE=/path/to/file` as an override.

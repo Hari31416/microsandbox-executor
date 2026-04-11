@@ -64,6 +64,13 @@ test("session routes support upload, full-session execute, listing, download, an
     executor
   });
 
+  const docs = await app.inject({
+    method: "GET",
+    url: "/docs"
+  });
+  assert.equal(docs.statusCode, 200);
+  assert.match(docs.headers["content-type"] ?? "", /text\/html/);
+
   const createSession = await app.inject({
     method: "POST",
     url: "/v1/sessions",

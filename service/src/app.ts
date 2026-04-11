@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 
 import type { AppConfig } from "./config.js";
 import { JobExecutor } from "./jobs/executor.js";
@@ -30,6 +32,29 @@ export async function buildApp(services: AppServices) {
     logger: createLoggerOptions(services.config)
   });
 
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: "Sandbox Executor API",
+        description: "HTTP API for managing sandbox sessions, uploads, execution, artifacts, and health checks.",
+        version: "0.1.0"
+      },
+      servers: [
+        {
+          url: `http://${services.config.host}:${services.config.port}`
+        }
+      ]
+    }
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: "/docs",
+    uiConfig: {
+      docExpansion: "list",
+      deepLinking: true
+    }
+  });
+
   await registerHealthRoutes(app, services);
   await registerSessionRoutes(app, services);
   await registerExecuteRoutes(app, services);
@@ -38,6 +63,7 @@ export async function buildApp(services: AppServices) {
     services.cleanup.stop();
     services.metadata.close();
   });
+  await app.ready();
 
   return app;
 }
