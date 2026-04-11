@@ -10,6 +10,89 @@ PythonProfile = Literal["default", "data-science"]
 
 
 @dataclass(slots=True)
+class CreateSessionRequest:
+    """Optional payload for POST /v1/sessions."""
+
+    session_id: str | None = None
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if self.session_id is not None:
+            payload["session_id"] = self.session_id
+        return payload
+
+
+@dataclass(slots=True)
+class SessionResponse:
+    """Response from POST /v1/sessions."""
+
+    session_id: str
+    created_at: str
+    expires_at: str | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SessionResponse":
+        return cls(
+            session_id=data["session_id"],
+            created_at=data["created_at"],
+            expires_at=data.get("expires_at"),
+        )
+
+
+@dataclass(slots=True)
+class FileMetadata:
+    """Metadata for a single file within a session workspace."""
+
+    path: str
+    size: int
+    content_type: str | None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FileMetadata":
+        return cls(
+            path=data["path"],
+            size=data["size"],
+            content_type=data.get("content_type"),
+            created_at=data.get("created_at"),
+            updated_at=data.get("updated_at"),
+        )
+
+
+@dataclass(slots=True)
+class UploadFilesResponse:
+    """Response from POST /v1/sessions/:sessionId/files."""
+
+    session_id: str
+    file_paths: list[str]
+    files: list[FileMetadata]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "UploadFilesResponse":
+        return cls(
+            session_id=data["session_id"],
+            file_paths=list(data.get("file_paths", [])),
+            files=[FileMetadata.from_dict(f) for f in data.get("files", [])],
+        )
+
+
+@dataclass(slots=True)
+class ListFilesResponse:
+    """Response from GET /v1/sessions/:sessionId/files."""
+
+    session_id: str
+    files: list[FileMetadata]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListFilesResponse":
+        return cls(
+            session_id=data["session_id"],
+            files=[FileMetadata.from_dict(f) for f in data.get("files", [])],
+        )
+
+
+@dataclass(slots=True)
 class ExecuteRequest:
     session_id: str
     code: str

@@ -130,25 +130,39 @@ sequenceDiagram
 
 ### Using the Python Client
 
+The Python client provides a type-safe and convenient way to interact with the Sandbox service.
+
 ```python
-from sandbox_executor_client import SandboxClient
+from sandbox_executor_client import SandboxExecutorClient, ExecuteRequest
 
-client = SandboxClient(base_url="http://localhost:3000")
+client = SandboxExecutorClient(base_url="http://localhost:3000")
 
-# Create a session
+# 1. Start a persistent session
 session = client.create_session()
+session_id = session.session_id
 
-# Upload a file
-client.upload_file(session.id, "data.csv", b"id,name\n1,test")
+# 2. Upload datasets or scripts
+client.upload_files(session_id, {
+    "input.csv": b"id,val\n1,10\n2,20",
+    "analyze.py": b"import pandas as pd; print(pd.read_csv('input.csv').val.sum())"
+})
 
-# Run code
+# 3. Execute code in the isolated microVM
 result = client.execute(
-    session_id=session.id,
-    code="import pandas as pd; df = pd.read_csv('data.csv'); print(df.name[0])",
-    profile="data-science"
+    ExecuteRequest(
+        session_id=session_id,
+        code="python analyze.py",
+        python_profile="data-science"
+    )
 )
 
-print(f"Output: {result.stdout}")
+print(f"Analysis Output: {result.stdout}") # Output: 30
+
+# 4. Download generated artifacts
+report_bytes = client.download_file(session_id, "analysis_report.pdf")
+
+# 5. Cleanup
+client.delete_session(session_id)
 ```
 
 ### Direct API (Bash)
