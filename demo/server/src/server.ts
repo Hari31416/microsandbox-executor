@@ -9,10 +9,11 @@ import { loadConfig, loadEnvFile } from "./config.js";
 import { ExecutorClient } from "./executor-client.js";
 
 const executeRequestSchema = z.object({
-  sessionId: z.string().min(1),
+  sessionId: z.string().min(1).optional(),
   filePaths: z.array(z.string().min(1)).optional(),
   entrypoint: z.string().min(1),
   pythonProfile: z.enum(["default", "data-science"]).default("default"),
+  executionMode: z.enum(["python", "bash"]).default("python"),
   code: z.string().min(1)
 });
 
@@ -100,19 +101,30 @@ async function main() {
 
   app.post("/api/execute", async (request, reply) => {
     const payload = executeRequestSchema.parse(request.body);
-    const result = await executor.execute({
-      session_id: payload.sessionId,
-      file_paths: payload.filePaths,
-      entrypoint: payload.entrypoint,
-      python_profile: payload.pythonProfile,
-      code: payload.code
-    });
+    const sessionId = payload.sessionId ?? (await executor.createSession(`demo-${randomUUID()}`)).session_id;
+    const filePaths = payload.filePaths && payload.filePaths.length > 0 ? payload.filePaths : undefined;
+    const result =
+      payload.executionMode === "bash"
+        ? await executor.executeBash({
+            session_id: sessionId,
+            file_paths: filePaths,
+            entrypoint: payload.entrypoint,
+            script: payload.code
+          })
+        : await executor.execute({
+            session_id: sessionId,
+            file_paths: filePaths,
+            entrypoint: payload.entrypoint,
+            python_profile: payload.pythonProfile,
+            code: payload.code
+          });
 
     return reply.send({
       ...result,
+      session_id: sessionId,
       downloads: result.files_uploaded.map((path) => ({
         key: path,
-        url: `/api/files?sessionId=${encodeURIComponent(payload.sessionId)}&path=${encodeURIComponent(path)}`
+        url: `/api/files?sessionId=${encodeURIComponent(sessionId)}&path=${encodeURIComponent(path)}`
       }))
     });
   });

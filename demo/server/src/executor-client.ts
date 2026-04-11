@@ -84,6 +84,36 @@ export class ExecutorClient {
     return executeResponseSchema.parse(json);
   }
 
+  async executeBash(payload: {
+    session_id: string;
+    file_paths?: string[];
+    script: string;
+    entrypoint?: string;
+    network_mode?: "none" | "allowlist" | "public";
+    allowed_hosts?: string[];
+  }) {
+    const response = await fetch(`${this.baseUrl}/v1/execute/bash`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        entrypoint: "main.sh",
+        network_mode: "none",
+        allowed_hosts: [],
+        ...payload
+      })
+    });
+
+    const json = await response.json();
+
+    if (!response.ok) {
+      throw new Error(typeof json?.error === "string" ? json.error : "Executor request failed");
+    }
+
+    return executeResponseSchema.parse(json);
+  }
+
   async createSession(sessionId?: string) {
     const response = await fetch(`${this.baseUrl}/v1/sessions`, {
       method: "POST",

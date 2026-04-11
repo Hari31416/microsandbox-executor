@@ -1,5 +1,5 @@
-import { Copy, FileCode2, FlaskConical, LoaderCircle, Play, UploadCloud } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Copy, FileCode2, FlaskConical, LoaderCircle, Play, Terminal, UploadCloud } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
 
 import { Badge } from "./components/ui/badge";
@@ -37,6 +37,8 @@ interface ExecutionResult {
   downloads: Array<{ key: string; url: string }>;
 }
 
+type ExecutionMode = "python" | "bash";
+
 const apiBaseUrl = (import.meta.env.VITE_DEMO_API_BASE_URL as string | undefined)?.replace(/\/+$/, "") ?? "";
 const apiUrl = (path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -52,7 +54,7 @@ const apiUrl = (path: string) => {
   return `${apiBaseUrl}${normalizedPath}`;
 };
 
-function generateSnippetForFiles(files: UploadedFile[]): { code: string; entrypoint: string; outputPath: string; profile: "default" | "data-science" } {
+function generatePythonSnippetForFiles(files: UploadedFile[]): { code: string; entrypoint: string; outputPath: string; profile: "default" | "data-science" } {
   const csvFile = files.find((f) => f.name.toLowerCase().endsWith(".csv"));
   const txtFile = files.find((f) => f.name.toLowerCase().endsWith(".txt"));
 
@@ -134,26 +136,39 @@ print(f"Listed {len(files)} files and saved to {output_path}")
   };
 }
 
-const starterCode = `# Upload one or more files first.
-# The code structure will auto-adapt based on file type.`;
+const pythonStarterCode = `from pathlib import Path
+
+output_path = Path("hello.txt")
+output_path.write_text("Hello from the sandbox!\\n", encoding="utf-8")
+
+print(f"Wrote {output_path}")
+`;
+
+const bashStarterCode = `#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'Hello from bash\\n' > hello.txt
+echo "Wrote hello.txt"
+`;
 
 export default function App() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [filePaths, setFilePaths] = useState<string[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>("python");
   const [entrypoint, setEntrypoint] = useState("main.py");
   const [pythonProfile, setPythonProfile] = useState<"default" | "data-science">("default");
   const [suggestedOutputPath, setSuggestedOutputPath] = useState("");
-  const [code, setCode] = useState(starterCode);
+  const [code, setCode] = useState(pythonStarterCode);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Upload source files to create a runnable workspace.");
+  const [statusMessage, setStatusMessage] = useState("Write Python or bash and run it in a fresh sandbox.");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"output" | "files">("output");
 
-  const readyToRun = sessionId.length > 0 && filePaths.length > 0 && code.trim().length > 0 && !running;
+  const readyToRun = code.trim().length > 0 && !running;
 
   const displayFiles = useMemo(
     () =>
@@ -201,14 +216,15 @@ export default function App() {
       setUploadedFiles(upload.files);
 
       // Override the backend suggestions with our specialized frontend generation
-      const snippet = generateSnippetForFiles(upload.files);
+      const snippet = generatePythonSnippetForFiles(upload.files);
+      setExecutionMode("python");
       setEntrypoint(snippet.entrypoint);
       setSuggestedOutputPath(snippet.outputPath);
       setCode(snippet.code);
       setPythonProfile(snippet.profile);
 
       setResult(null);
-      setStatusMessage(`Session ${upload.sessionId} is ready. Automatically applied ${snippet.profile} profile.`);
+      setStatusMessage(`Session ${upload.sessionId} is ready. Automatically applied ${snippet.profile} Python profile.`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -233,10 +249,11 @@ export default function App() {
           "content-type": "application/json"
         },
         body: JSON.stringify({
-          sessionId,
-          filePaths,
+          sessionId: sessionId || undefined,
+          filePaths: filePaths.length > 0 ? filePaths : undefined,
           entrypoint,
           pythonProfile,
+          executionMode,
           code
         })
       });
@@ -248,10 +265,11 @@ export default function App() {
       }
 
       const execution = payload as ExecutionResult;
+      setSessionId(execution.session_id);
       setResult(execution);
       setStatusMessage(
         execution.exit_code === 0
-          ? "Execution completed. Any new or changed files were saved back to the session."
+          ? `Execution completed in ${executionMode}. Any new or changed files were saved back to the session.`
           : "Execution finished with errors. Review stderr and adjust the code."
       );
     } catch (error) {
@@ -266,6 +284,38 @@ export default function App() {
     setStatusMessage(`Copied ${text}`);
   }
 
+  function switchExecutionMode(mode: ExecutionMode) {
+    setExecutionMode(mode);
+    setResult(null);
+    if (mode === "bash") {
+      setEntrypoint("main.sh");
+      setCode(bashStarterCode);
+      setSuggestedOutputPath("hello.txt");
+      setStatusMessage("Shell console active. The editor will run as a bash script.");
+      return;
+    }
+
+    const snippet = generatePythonSnippetForFiles(uploadedFiles);
+    setEntrypoint(snippet.entrypoint);
+    setCode(snippet.code);
+    setSuggestedOutputPath(snippet.outputPath);
+    setPythonProfile(snippet.profile);
+    setStatusMessage(
+      uploadedFiles.length > 0
+        ? `Python console active. Applied ${snippet.profile} profile for the current workspace.`
+        : "Python console active. Run code even without uploaded files."
+    );
+  }
+
+  useEffect(() => {
+    if (executionMode === "python" && uploadedFiles.length > 0) {
+      const snippet = generatePythonSnippetForFiles(uploadedFiles);
+      setEntrypoint(snippet.entrypoint);
+      setSuggestedOutputPath(snippet.outputPath);
+      setPythonProfile(snippet.profile);
+    }
+  }, [executionMode, uploadedFiles]);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#1e1e1e] text-slate-300 font-sans">
       {/* Top Header */}
@@ -276,6 +326,9 @@ export default function App() {
             <h1 className="text-sm font-semibold tracking-wide text-white">Sandbox Demo</h1>
           </div>
           <div className="h-6 w-px bg-white/10" />
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-slate-500">
+            {sessionId || "NO ACTIVE SESSION"}
+          </span>
         </div>
 
         <div className="flex items-center gap-4">
@@ -286,7 +339,7 @@ export default function App() {
             disabled={!readyToRun || running}
           >
             {running ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-            Run Transform
+            Run Code
           </Button>
         </div>
       </header>
@@ -321,7 +374,7 @@ export default function App() {
                       disabled={uploading || selectedFiles.length === 0}
                     >
                       {uploading ? <LoaderCircle className="mr-2 h-3 w-3 animate-spin" /> : null}
-                      Upload & Generate
+                      Upload Files
                     </Button>
                   </div>
 
@@ -351,46 +404,26 @@ export default function App() {
                   </div>
                 </div>
               </section>
-
-              {suggestedOutputPath && (
-                <section>
-                  <Label className="text-[9px] font-bold uppercase text-slate-500 px-1 tracking-wider">Output Target</Label>
-                  <div className="mt-1 flex items-center justify-between rounded border border-white/5 bg-[#141414] p-2 hover:border-emerald-500/30 transition-colors group cursor-pointer" onClick={() => void copy(suggestedOutputPath)}>
-                    <code className="truncate text-[10px] font-mono text-emerald-400/90">
-                      {suggestedOutputPath}
-                    </code>
-                    <Copy className="h-3 w-3 opacity-0 group-hover:opacity-100 text-slate-500" />
-                  </div>
-                </section>
-              )}
-
               <section>
-                <Label className="text-[9px] font-bold uppercase text-slate-500 px-1 tracking-wider">Runtime Config</Label>
                 <div className="mt-1 space-y-2">
-                  <div className="flex items-center justify-between rounded border border-white/5 bg-[#141414] p-2 group cursor-pointer hover:border-emerald-500/30 transition-colors" onClick={() => void copy(entrypoint)}>
-                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">ENTRY</span>
-                    <code className="truncate text-[10px] font-mono text-emerald-400/90">
-                      {entrypoint}
-                    </code>
-                  </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={`h-7 text-[10px] rounded-sm transition-colors border ${pythonProfile === "default" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-transparent border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"}`}
-                      onClick={() => setPythonProfile("default")}
-                    >
-                      Core 3.11
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={`h-7 text-[10px] rounded-sm transition-colors border ${pythonProfile === "data-science" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-transparent border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"}`}
-                      onClick={() => setPythonProfile("data-science")}
-                    >
-                      Data Science
-                    </Button>
-                  </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`h-7 text-[10px] rounded-sm transition-colors border ${pythonProfile === "default" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-transparent border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"}`}
+                        onClick={() => setPythonProfile("default")}
+                      >
+                        Core 3.11
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`h-7 text-[10px] rounded-sm transition-colors border ${pythonProfile === "data-science" ? "bg-emerald-600 border-emerald-500 text-white" : "bg-transparent border-white/10 text-slate-400 hover:bg-white/5 hover:text-white"}`}
+                        onClick={() => setPythonProfile("data-science")}
+                      >
+                        Data Science
+                      </Button>
+                    </div>
                 </div>
               </section>
             </div>
@@ -413,7 +446,7 @@ export default function App() {
             <div className="flex-1 w-full bg-[#1e1e1e]">
               <Editor
                 height="100%"
-                language="python"
+                language={executionMode === "bash" ? "shell" : "python"}
                 theme="vs-dark"
                 value={code}
                 onChange={(val) => setCode(val || "")}
@@ -453,6 +486,22 @@ export default function App() {
 
               {/* Mini Status */}
               <div className="flex items-center gap-2 pr-2">
+                <div className="mr-2 flex items-center rounded border border-white/10 bg-[#121212] p-0.5">
+                  <button
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${executionMode === "python" ? "bg-emerald-600 text-white" : "text-slate-400 hover:text-white"}`}
+                    onClick={() => switchExecutionMode("python")}
+                  >
+                    <Terminal className="h-3 w-3" />
+                    Python
+                  </button>
+                  <button
+                    className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${executionMode === "bash" ? "bg-amber-600 text-black" : "text-slate-400 hover:text-white"}`}
+                    onClick={() => switchExecutionMode("bash")}
+                  >
+                    <Terminal className="h-3 w-3" />
+                    Bash
+                  </button>
+                </div>
                 <div className="flex items-center gap-1.5 max-w-[400px]">
                   <div className={`w-2 h-2 rounded-full ${errorMessage ? 'bg-red-500' : 'bg-emerald-500 animate-pulse'}`} />
                   <span className="text-[9px] text-slate-400 truncate uppercase tracking-widest">{errorMessage || statusMessage}</span>
@@ -463,6 +512,10 @@ export default function App() {
             <div className="flex-1 overflow-auto p-4 font-mono text-xs dark-scrollbar selection:bg-emerald-500/30">
               {activeTab === "output" && (
                 <div className="space-y-4">
+                  <div className="rounded border border-white/5 bg-[#111111] px-3 py-2 text-[11px] text-slate-400">
+                    <span className="mr-2 text-slate-500">$</span>
+                    {executionMode === "bash" ? `bash ${entrypoint}` : `python3 ${entrypoint}`}
+                  </div>
                   {result ? (
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center gap-4 text-[10px] pb-3 border-b border-white/5">
