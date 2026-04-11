@@ -71,6 +71,14 @@ test("session routes support upload, full-session execute, listing, download, an
   assert.equal(docs.statusCode, 200);
   assert.match(docs.headers["content-type"] ?? "", /text\/html/);
 
+  const openapi = await app.inject({
+    method: "GET",
+    url: "/docs/json"
+  });
+  assert.equal(openapi.statusCode, 200);
+  assert.match(openapi.headers["content-type"] ?? "", /application\/json/);
+  assert.equal((openapi.json() as { openapi: string }).openapi, "3.0.3");
+
   const createSession = await app.inject({
     method: "POST",
     url: "/v1/sessions",

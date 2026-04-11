@@ -41,7 +41,7 @@ export async function buildApp(services: AppServices) {
       },
       servers: [
         {
-          url: `http://${services.config.host}:${services.config.port}`
+          url: "/"
         }
       ]
     }
