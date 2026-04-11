@@ -35,7 +35,7 @@ web-logs:
   fi
 
 sandbox-build:
-  cd service && bun run build
+  cd service && bun install && bun run build
 
 sandbox-up:
   mkdir -p .run
