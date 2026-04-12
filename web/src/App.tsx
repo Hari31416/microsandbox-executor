@@ -1,5 +1,5 @@
 import { Copy, FileCode2, FlaskConical, LoaderCircle, Play, Terminal, UploadCloud } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 
 import { Badge } from "./components/ui/badge";
@@ -43,6 +43,16 @@ const apiUrl = (path: string) => {
 
   return `${apiBaseUrl}${normalizedPath}`;
 };
+
+function resolveUploadFilename(file: File) {
+  const relativePath = file.webkitRelativePath.trim();
+
+  if (relativePath.length > 0 && !relativePath.startsWith("/")) {
+    return relativePath;
+  }
+
+  return file.name;
+}
 
 function generatePythonSnippetForFiles(files: UploadedFile[]): { code: string; entrypoint: string; outputPath: string; profile: "default" | "data-science" } {
   const csvFile = files.find((f) => f.name.toLowerCase().endsWith(".csv"));
@@ -159,6 +169,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<"output" | "files">("output");
   const [terminalInput, setTerminalInput] = useState("");
   const [lastExecutedCommand, setLastExecutedCommand] = useState<string | null>(null);
+  const filesInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
   const readyToRun = code.trim().length > 0 && !running;
 
@@ -170,6 +182,10 @@ export default function App() {
       })),
     [uploadedFiles]
   );
+
+  function handleSelectedFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    setSelectedFiles(Array.from(event.target.files ?? []));
+  }
 
   async function handleUpload() {
     if (selectedFiles.length === 0) {
@@ -197,7 +213,7 @@ export default function App() {
 
       const formData = new FormData();
       selectedFiles.forEach((file) => {
-        formData.append("files", file, file.name);
+        formData.append("files", file, resolveUploadFilename(file));
       });
 
       const uploadRes = await fetch(apiUrl(`/v1/sessions/${encodeURIComponent(currentSessionId)}/files`), {
@@ -405,16 +421,49 @@ export default function App() {
                   <div className="rounded border border-dashed border-white/10 p-4 bg-[#1e1e1e] hover:bg-[#252525] transition-colors">
                     <div className="mb-3 flex items-center gap-2 text-slate-300">
                       <UploadCloud className="h-4 w-4 text-emerald-500" />
-                      <span className="text-xs font-semibold">Workspace Inputs</span>
+                      <span className="text-xs font-semibold">Workspace Inputs (Files or Folder)</span>
                     </div>
-                    <Input
+                    <input
+                      ref={filesInputRef}
                       id="files"
                       type="file"
                       multiple
-                      className="h-8 text-[11px] mb-3 bg-[#1e1e1e] border-white/10 text-slate-300 file:text-emerald-400 file:font-medium hover:border-emerald-500/50 transition-colors cursor-pointer rounded-sm"
-                      onChange={(event) => setSelectedFiles(Array.from(event.target.files ?? []))}
+                      className="hidden"
+                      onChange={handleSelectedFiles}
                     />
+                    <input
+                      ref={folderInputRef}
+                      id="folder"
+                      type="file"
+                      multiple
+                      webkitdirectory=""
+                      directory=""
+                      className="hidden"
+                      onChange={handleSelectedFiles}
+                    />
+                    <div className="mb-3 grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 text-[11px] font-semibold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-sm"
+                        onClick={() => filesInputRef.current?.click()}
+                      >
+                        Choose Files
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 text-[11px] font-semibold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-sm"
+                        onClick={() => folderInputRef.current?.click()}
+                      >
+                        Choose Folder
+                      </Button>
+                    </div>
+                    <p className="mb-3 truncate text-[10px] text-slate-500">
+                      {selectedFiles.length > 0 ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected` : "No files selected"}
+                    </p>
                     <Button
+                      type="button"
                       size="sm"
                       className="w-full h-8 text-[11px] font-semibold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-sm"
                       onClick={handleUpload}
