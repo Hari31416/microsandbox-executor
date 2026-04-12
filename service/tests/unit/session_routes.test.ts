@@ -124,6 +124,27 @@ test("session routes support upload, full-session execute, listing, download, an
   assert.equal(upload.statusCode, 201);
   assert.deepEqual((upload.json() as { file_paths: string[] }).file_paths, ["input.txt"]);
 
+  const nestedBoundary = "----codex-session-nested-test";
+  const nestedMultipartBody = [
+    `--${nestedBoundary}`,
+    'Content-Disposition: form-data; name="files"; filename="nested/fixtures/input-2.txt"',
+    "Content-Type: text/plain",
+    "",
+    "nested hello",
+    `--${nestedBoundary}--`,
+    ""
+  ].join("\r\n");
+  const nestedUpload = await app.inject({
+    method: "POST",
+    url: `/v1/sessions/${session.session_id}/files`,
+    headers: {
+      "content-type": `multipart/form-data; boundary=${nestedBoundary}`
+    },
+    payload: nestedMultipartBody
+  });
+  assert.equal(nestedUpload.statusCode, 201);
+  assert.deepEqual((nestedUpload.json() as { file_paths: string[] }).file_paths, ["nested/fixtures/input-2.txt"]);
+
   const execute = await app.inject({
     method: "POST",
     url: "/v1/execute",
@@ -145,7 +166,7 @@ test("session routes support upload, full-session execute, listing, download, an
   });
   assert.equal(list.statusCode, 200);
   const listedFiles = (list.json() as { files: Array<{ path: string }> }).files.map((file) => file.path);
-  assert.deepEqual(listedFiles, ["input.txt", "main.py", "output.txt"]);
+  assert.deepEqual(listedFiles, ["input.txt", "main.py", "nested/fixtures/input-2.txt", "output.txt"]);
 
   const download = await app.inject({
     method: "GET",
@@ -153,6 +174,13 @@ test("session routes support upload, full-session execute, listing, download, an
   });
   assert.equal(download.statusCode, 200);
   assert.equal(download.body, "HELLO WORLD");
+
+  const nestedDownload = await app.inject({
+    method: "GET",
+    url: `/v1/sessions/${session.session_id}/files/nested/fixtures/input-2.txt`
+  });
+  assert.equal(nestedDownload.statusCode, 200);
+  assert.equal(nestedDownload.body, "nested hello");
 
   const bashExecute = await app.inject({
     method: "POST",

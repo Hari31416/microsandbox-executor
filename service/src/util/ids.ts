@@ -22,5 +22,15 @@ export function validateSessionId(sessionId: string) {
 }
 
 export function sanitizeUploadedFilename(filename: string) {
-  return filename.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const normalizedSeparators = filename.replaceAll("\\", "/").trim();
+  const sanitized = normalizedSeparators
+    .replace(/[^a-zA-Z0-9._/-]/g, "-")
+    .replace(/\/{2,}/g, "/")
+    .replace(/\/+$/g, "");
+
+  if (sanitized.length === 0 || sanitized === ".") {
+    return "upload.bin";
+  }
+
+  return sanitized;
 }

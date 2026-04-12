@@ -16,6 +16,7 @@ const createSessionSchema = z
 
 export async function registerSessionRoutes(app: FastifyInstance, services: AppServices) {
   await app.register(multipart, {
+    preservePath: true,
     limits: {
       fileSize: services.config.maxUploadBytes,
       files: services.config.maxFilesPerUpload
