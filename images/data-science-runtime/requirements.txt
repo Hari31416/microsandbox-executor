@@ -6,3 +6,6 @@ scikit-learn>=1.5,<2
 plotly>=6,<7
 scipy>=1.13,<2
 openpyxl>=3.1,<4
+tqdm==4.67.1
+tabulate==0.10.0
+joblib==1.5.3
