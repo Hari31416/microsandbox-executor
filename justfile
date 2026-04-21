@@ -74,5 +74,12 @@ build-data-science-image image="sandbox-data-science:py312-v1":
 test-data-science-image image="sandbox-data-science:py312-v1":
   docker run --rm --platform linux/arm64 {{image}} python3 -c "import numpy, pandas, matplotlib, seaborn, sklearn, plotly, scipy, openpyxl; print('data-science runtime ok')"
 
-publish-data-science-image image:
-  docker buildx build --platform linux/amd64,linux/arm64 -t {{image}} --push images/data-science-runtime
+publish-data-science-image:
+  docker buildx build --platform linux/amd64,linux/arm64 -t hari31416/sandbox-data-science:py312-v3 --push images/data-science-runtime
+
+publish-data-science-heavy-image:
+  docker buildx build --platform linux/amd64,linux/arm64 -t hari31416/data-science-heavy-runtime:py312-v2 --push images/data-science-heavy-runtime
+  
+publish-ml-dl-image:
+  docker buildx build --platform linux/amd64,linux/arm64 -t hari31416/ml-dl-runtime:py312-v2 --push images/ml-dl-runtime
+

@@ -15,6 +15,7 @@ tqdm==4.67.1
 tabulate==0.10.0
 requests==2.32.3
 joblib==1.5.3
+pyarrow==23.0.1
 
 # --- CPU-Only Deep Learning Modules ---
 torch==2.6.0

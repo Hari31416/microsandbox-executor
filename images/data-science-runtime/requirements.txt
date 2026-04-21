@@ -9,3 +9,4 @@ openpyxl>=3.1,<4
 tqdm==4.67.1
 tabulate==0.10.0
 joblib==1.5.3
+pyarrow==23.0.1
